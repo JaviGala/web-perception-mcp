@@ -1,5 +1,7 @@
 # web-perception MCP Server
 
+[![Test](https://github.com/JaviGala/web-perception-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/JaviGala/web-perception-mcp/actions/workflows/test.yml)
+
 A small [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that lets non-visual LLMs understand local images and webpage screenshots by delegating visual analysis to a configurable vision-capable model.
 
 ```text
