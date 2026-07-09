@@ -1,0 +1,20 @@
+{
+	"name": "web-perception-mcp",
+	"version": "1.0.0",
+	"description": "Delegated vision MCP server for images and webpage screenshots",
+	"type": "module",
+	"private": true,
+	"license": "Apache-2.0",
+	"main": "src/server.js",
+	"scripts": {
+		"start": "node src/server.js",
+		"check": "node --check src/server.js && node --check src/browser.js && node --check src/extraction.js && node --check src/page-health.js && node --check src/paths.js && node --check src/screenshot-result.js && node --check src/security.js && node --check src/vision.js",
+		"test": "npm run check && node --test test/*.test.js"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.12.0",
+		"@mozilla/readability": "^0.6.0",
+		"jsdom": "^25.0.0",
+		"playwright": "^1.49.0"
+	}
+}
