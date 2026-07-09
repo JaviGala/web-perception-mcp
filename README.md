@@ -101,6 +101,8 @@ This is a local `stdio` MCP server. The exact configuration format varies by cli
 }
 ```
 
+For a tested Cline setup with smoke-test prompts and troubleshooting, see [`docs/cline-setup.md`](./docs/cline-setup.md).
+
 If your client launches the server from the project directory, you can also keep provider values in `.env`. Some MCP clients do not inherit your shell environment, so explicit `env` entries can be more reliable.
 
 ### Windows path example
