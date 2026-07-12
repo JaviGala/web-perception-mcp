@@ -8,7 +8,7 @@ A small local [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) s
 non-visual model → image or webpage screenshot → vision model → grounded text/JSON result
 ```
 
-The project deliberately stays focused on three operations: load or capture images, send them to a vision provider, and return the result. It is an experimental AI-assisted project rather than production-audited infrastructure.
+The project deliberately stays focused on three operations: load or capture images, send them to a vision provider, and return the result. It is an experimental project rather than production-audited infrastructure.
 
 ## Tools
 
@@ -26,7 +26,7 @@ This is not a general browser-automation MCP. It does not click through flows, f
 
 - Node.js 18+
 - An MCP client that can run local `stdio` servers
-- An API key for an OpenAI-compatible vision endpoint
+- An API key for a vision provider with an OpenAI-style `/chat/completions` endpoint
 - Playwright Chromium
 
 ## Install
@@ -105,6 +105,9 @@ Page responses include an `http_status` and `page_health` summary to help distin
 
 ## Security
 
+> [!CAUTION]
+> Local images, webpage screenshots, compact page context, and prompts are sent to the configured vision provider. Do not use sensitive material unless you trust that provider's privacy, retention, and data-processing policies.
+
 The server handles untrusted URLs, webpages, and local files. Its safeguards include:
 
 - accepting only `http:` and `https:` page URLs;
@@ -117,13 +120,11 @@ These are mitigations, not guarantees. Do not let downstream agents execute comm
 
 Do not commit `.env` files, API keys, private screenshots, or MCP client configurations containing secrets. Maintainer and release checks are documented in [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
-## Development
+## Contributing
 
-```bash
-npm test
-```
+Run `npm test` before opening a pull request. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for project scope, development setup, versioning, release checks, and security guidance.
 
-Contribution scope, project structure, release versioning, secret scanning, and dependency-licence checks are covered in [`CONTRIBUTING.md`](./CONTRIBUTING.md). The broader scoping retrospective is in [`docs/scope-retrospective.md`](./docs/scope-retrospective.md).
+The broader scoping retrospective is in [`docs/scope-retrospective.md`](./docs/scope-retrospective.md).
 
 ## License
 
