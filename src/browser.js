@@ -348,10 +348,14 @@ async function takeSectionScreenshots(page, options) {
 	const step = Math.max(1, viewport.height - sectionOverlap);
 	const paths = [];
 	const sections = [];
+	let previousScrollY = null;
 
-	for (let y = 0, index = 0; y < dimensions.height && index < maxSections; y += step, index++) {
-		await page.evaluate((scrollY) => window.scrollTo(0, scrollY), y);
+	for (let requestedY = 0, index = 0; requestedY < dimensions.height && index < maxSections; requestedY += step, index++) {
+		await page.evaluate((scrollY) => window.scrollTo(0, scrollY), requestedY);
 		await page.waitForTimeout(150);
+
+		const actualY = await page.evaluate(() => window.scrollY);
+		if (actualY === previousScrollY) break;
 
 		const sectionPath = sectionScreenshotPath(basePath, timestamp, index + 1);
 
@@ -360,10 +364,13 @@ async function takeSectionScreenshots(page, options) {
 		sections.push({
 			index: index + 1,
 			path: sectionPath,
-			y,
+			y: actualY,
 			width: viewport.width,
 			height: viewport.height,
 		});
+		previousScrollY = actualY;
+
+		if (actualY + viewport.height >= dimensions.height) break;
 	}
 
 	await page.evaluate(({ x, y }) => window.scrollTo(x, y), originalScroll);

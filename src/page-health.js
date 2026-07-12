@@ -63,6 +63,13 @@ function addProblem(problemCategories, reasons, warnings, signals, category, rea
 	if (signal) addSignal(signals, signal);
 }
 
+function normalizeStatusCode(value) {
+	const statusCode = Number(value);
+	return Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599
+		? statusCode
+		: null;
+}
+
 function detectBotProtection({ title, visibleText, combinedText, problemCategories, reasons, warnings, signals }) {
 	let matched = false;
 
@@ -117,10 +124,20 @@ function detectBotProtection({ title, visibleText, combinedText, problemCategori
 	}
 }
 
-function detectHttpError({ title, visibleText, problemCategories, reasons, warnings, signals }) {
+function detectHttpError({ statusCode, title, visibleText, problemCategories, reasons, warnings, signals }) {
+	const matchedStatus = statusCode !== null && statusCode >= 400;
 	const matchedTitle = matchesAny(title, HTTP_ERROR_TITLE_PATTERNS);
 	const matchedText = /\b(403 forbidden|404 not found|429 too many requests|500 internal server error|502 bad gateway|503 service unavailable|page not found)\b/i.test(visibleText);
-	if (!matchedTitle && !matchedText) return;
+	if (!matchedStatus && !matchedTitle && !matchedText) return;
+
+	const reason = matchedStatus
+		? `Captured page returned HTTP ${statusCode}.`
+		: "Captured page visible text or title looks like an HTTP error page.";
+	const signal = matchedStatus
+		? `HTTP status is ${statusCode}`
+		: matchedTitle
+			? `title matched HTTP-error pattern: ${title}`
+			: "visible text matched HTTP-error pattern";
 
 	addProblem(
 		problemCategories,
@@ -128,8 +145,8 @@ function detectHttpError({ title, visibleText, problemCategories, reasons, warni
 		warnings,
 		signals,
 		"http_error",
-		"Captured page visible text or title looks like an HTTP error page.",
-		matchedTitle ? `title matched HTTP-error pattern: ${title}` : "visible text matched HTTP-error pattern",
+		reason,
+		signal,
 	);
 }
 
@@ -194,19 +211,24 @@ function confidenceFor(status, problemCategories) {
 	return "low";
 }
 
-export function buildPageHealth(pageContext) {
+export function buildPageHealth(pageContext, options = {}) {
+	const statusCode = normalizeStatusCode(options.statusCode);
+
 	if (!pageContext) {
+		const isHttpError = statusCode !== null && statusCode >= 400;
+		const reason = isHttpError ? `Captured page returned HTTP ${statusCode}.` : null;
 		return {
 			pageHealth: {
 				collected: false,
-				capture_status: "not_collected",
-				problem_categories: [],
-				confidence: "none",
-				signals: [],
-				suspicious_blank_or_error_page: false,
-				reasons: [],
+				http_status: statusCode,
+				capture_status: isHttpError ? "likely_http_error" : "not_collected",
+				problem_categories: isHttpError ? ["http_error"] : [],
+				confidence: isHttpError ? "high" : "none",
+				signals: isHttpError ? [`HTTP status is ${statusCode}`] : [],
+				suspicious_blank_or_error_page: isHttpError,
+				reasons: reason ? [reason] : [],
 			},
-			warnings: [],
+			warnings: reason ? [reason] : [],
 		};
 	}
 
@@ -267,7 +289,7 @@ export function buildPageHealth(pageContext) {
 	}
 
 	detectBotProtection({ title, visibleText, combinedText, problemCategories, reasons, warnings, signals });
-	detectHttpError({ title, visibleText, problemCategories, reasons, warnings, signals });
+	detectHttpError({ statusCode, title, visibleText, problemCategories, reasons, warnings, signals });
 	detectJsLoadingFailure({ visibleText, problemCategories, reasons, warnings, signals });
 	detectLoginOrPaywall({ visibleText, problemCategories, reasons, warnings, signals });
 	detectGeoOrPolicyBlock({ visibleText, problemCategories, reasons, warnings, signals });
@@ -277,6 +299,7 @@ export function buildPageHealth(pageContext) {
 	return {
 		pageHealth: {
 			collected: true,
+			http_status: statusCode,
 			title_present: Boolean(title),
 			visible_text_length: visibleText.length,
 			heading_count: headings.length,

@@ -127,7 +127,8 @@ For `npx`-based MCP servers on Windows, some clients require wrapping the comman
 | `VISION_MODEL` | fallback if unset | Vision-capable model to use. Set this explicitly for new configurations. |
 | `VISION_PROVIDER_NAME` | `vision provider` | Optional label used in logs and error messages. |
 | `VISION_TEMPERATURE` | `0.3` | Default temperature. |
-| `VISION_MAX_TOKENS` | `2000` | Default max tokens. |
+| `VISION_MAX_TOKENS` | `2000` | Default max tokens. An explicit tool argument overrides this value. |
+| `VISION_TIMEOUT_MS` | `60000` | Maximum time to wait for the vision provider before returning a timeout error. |
 | `ALLOWED_IMAGE_DIRS` | project dir, app temp dir, screenshot output dir, OS temp dir | Comma-separated allowlist for local images. |
 | `MAX_IMAGES_PER_REQUEST` | `8` | Maximum images sent in one vision request. |
 | `MAX_IMAGE_BYTES` | `10485760` | Maximum size per image file. |
@@ -208,7 +209,7 @@ C:\Users\you\Pictures\screenshot.png
 
 ## Capture diagnostics
 
-`capture_page_screenshot` and `analyze_page_screenshot` return page-health diagnostics so the caller can distinguish a successful capture from a rendered error page, bot-protection page, login wall, paywall, or low-content page.
+`capture_page_screenshot` and `analyze_page_screenshot` return the final HTTP status and page-health diagnostics so the caller can distinguish a successful capture from an HTTP error, rendered error page, bot-protection page, login wall, paywall, or low-content page.
 
 The response includes fields such as:
 
@@ -216,6 +217,7 @@ The response includes fields such as:
 {
   "screenshot_path": "/tmp/web-perception-mcp/web-perception-screenshot-123.png",
   "screenshot_file_url": "file:///tmp/web-perception-mcp/web-perception-screenshot-123.png",
+  "http_status": 200,
   "page_health": {
     "capture_status": "ok",
     "problem_categories": [],

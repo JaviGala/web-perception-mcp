@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 
 import { buildPageHealth } from "../src/page-health.js";
 
-function health(pageContext) {
-	return buildPageHealth(pageContext).pageHealth;
+function health(pageContext, options = {}) {
+	return buildPageHealth(pageContext, options).pageHealth;
 }
 
 test("buildPageHealth marks normal pages as ok", () => {
@@ -65,6 +65,33 @@ test("buildPageHealth detects HTTP error pages", () => {
 	assert.equal(result.capture_status, "likely_http_error");
 	assert.equal(result.problem_categories.includes("http_error"), true);
 	assert.equal(result.suspicious_blank_or_error_page, true);
+});
+
+test("buildPageHealth uses HTTP status even when the rendered page looks normal", () => {
+	const result = health(
+		{
+			title: "Friendly missing page",
+			visible_text_excerpt: "We could not find that resource. Return to the home page to continue browsing.",
+			headings: [{ level: 1, text: "Something went wrong" }],
+			interactive_elements: [{ role: "link", text: "Home" }],
+		},
+		{ statusCode: 404 },
+	);
+
+	assert.equal(result.http_status, 404);
+	assert.equal(result.capture_status, "likely_http_error");
+	assert.equal(result.problem_categories.includes("http_error"), true);
+	assert.match(result.signals.join("\n"), /HTTP status is 404/);
+});
+
+test("buildPageHealth reports HTTP errors without page context", () => {
+	const result = buildPageHealth(null, { statusCode: 503 });
+
+	assert.equal(result.pageHealth.collected, false);
+	assert.equal(result.pageHealth.http_status, 503);
+	assert.equal(result.pageHealth.capture_status, "likely_http_error");
+	assert.equal(result.pageHealth.suspicious_blank_or_error_page, true);
+	assert.match(result.warnings.join("\n"), /503/);
 });
 
 test("buildPageHealth detects JavaScript loading failures", () => {
