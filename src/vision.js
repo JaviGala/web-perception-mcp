@@ -234,17 +234,37 @@ export async function sendToVisionModel(prompt, imagePaths = [], options = {}) {
 		timeoutMs: config.requestTimeoutMs,
 	});
 
-	let response;
+	const signal = AbortSignal.timeout(config.requestTimeoutMs);
 	try {
-		response = await fetch(`${config.baseUrl}/chat/completions`, {
+		const response = await fetch(`${config.baseUrl}/chat/completions`, {
 			method: "POST",
 			headers: {
 				Authorization: `Bearer ${config.apiKey}`,
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify(body),
-			signal: AbortSignal.timeout(config.requestTimeoutMs),
+			signal,
 		});
+
+		if (!response.ok) {
+			const errorBody = await response.text();
+			let hint = "";
+			if (response.status === 401) {
+				hint = "\n\nHint: Your API key is invalid. Check VISION_API_KEY in .env or your MCP client environment.";
+			} else if (response.status === 402) {
+				hint = "\n\nHint: The configured model may not be included in your provider account or plan.";
+			} else if (response.status === 429) {
+				hint = "\n\nHint: Rate limited. Wait a moment and try again.";
+			}
+			throw new Error(`${config.providerName} API error: ${response.status} ${response.statusText} - ${errorBody}${hint}`);
+		}
+
+		const data = await response.json();
+		const choice = data.choices?.[0]?.message?.content || "";
+		const usage = data.usage || null;
+
+		safeLog("info", "Vision response received", { length: choice.length, usage });
+		return { content: choice, usage };
 	} catch (err) {
 		if (err?.name === "AbortError" || err?.name === "TimeoutError") {
 			const timeoutError = new Error(
@@ -255,26 +275,6 @@ export async function sendToVisionModel(prompt, imagePaths = [], options = {}) {
 		}
 		throw err;
 	}
-
-	if (!response.ok) {
-		const errorBody = await response.text();
-		let hint = "";
-		if (response.status === 401) {
-			hint = "\n\nHint: Your API key is invalid. Check VISION_API_KEY in .env or your MCP client environment.";
-		} else if (response.status === 402) {
-			hint = "\n\nHint: The configured model may not be included in your provider account or plan.";
-		} else if (response.status === 429) {
-			hint = "\n\nHint: Rate limited. Wait a moment and try again.";
-		}
-		throw new Error(`${config.providerName} API error: ${response.status} ${response.statusText} - ${errorBody}${hint}`);
-	}
-
-	const data = await response.json();
-	const choice = data.choices?.[0]?.message?.content || "";
-	const usage = data.usage || null;
-
-	safeLog("info", "Vision response received", { length: choice.length, usage });
-	return { content: choice, usage };
 }
 
 export function buildVisualPrompt(pageContext, userPrompt) {
