@@ -5,7 +5,15 @@
 // The request shape is intentionally OpenAI-style /chat/completions with mixed
 // text and image_url message content.
 
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import {
+	closeSync,
+	existsSync,
+	openSync,
+	readFileSync,
+	readSync,
+	realpathSync,
+	statSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { safeLog } from "./security.js";
@@ -19,6 +27,19 @@ function firstEnv(names, defaultValue = "") {
 	return defaultValue;
 }
 
+function configuredNumber(value, fallback, options = {}) {
+	const {
+		minimum = Number.NEGATIVE_INFINITY,
+		maximum = Number.POSITIVE_INFINITY,
+		integer = false,
+	} = options;
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed)) return fallback;
+	const normalized = integer ? Math.trunc(parsed) : parsed;
+	if (normalized < minimum || normalized > maximum) return fallback;
+	return normalized;
+}
+
 function visionConfig() {
 	return {
 		providerName: firstEnv(["VISION_PROVIDER_NAME"], "vision provider"),
@@ -28,10 +49,31 @@ function visionConfig() {
 			"https://nano-gpt.com/api/subscription/v1",
 		).replace(/\/+$/, ""),
 		model: firstEnv(["VISION_MODEL", "NANOGPT_MODEL"], "minimax/minimax-m3"),
-		defaultTemperature: parseFloat(firstEnv(["VISION_TEMPERATURE", "NANOGPT_TEMPERATURE"], "0.3")),
-		defaultMaxTokens: parseInt(firstEnv(["VISION_MAX_TOKENS", "NANOGPT_MAX_TOKENS"], "2000"), 10),
-		maxImagesPerRequest: parseInt(process.env.MAX_IMAGES_PER_REQUEST || "8", 10),
-		maxImageBytes: parseInt(process.env.MAX_IMAGE_BYTES || "10485760", 10),
+		defaultTemperature: configuredNumber(
+			firstEnv(["VISION_TEMPERATURE", "NANOGPT_TEMPERATURE"], "0.3"),
+			0.3,
+			{ minimum: 0, maximum: 2 },
+		),
+		defaultMaxTokens: configuredNumber(
+			firstEnv(["VISION_MAX_TOKENS", "NANOGPT_MAX_TOKENS"], "2000"),
+			2000,
+			{ minimum: 1, maximum: 1000000, integer: true },
+		),
+		requestTimeoutMs: configuredNumber(
+			process.env.VISION_TIMEOUT_MS || "60000",
+			60000,
+			{ minimum: 1, maximum: 600000, integer: true },
+		),
+		maxImagesPerRequest: configuredNumber(
+			process.env.MAX_IMAGES_PER_REQUEST || "8",
+			8,
+			{ minimum: 1, maximum: 100, integer: true },
+		),
+		maxImageBytes: configuredNumber(
+			process.env.MAX_IMAGE_BYTES || "10485760",
+			10485760,
+			{ minimum: 1, maximum: 1073741824, integer: true },
+		),
 	};
 }
 
@@ -82,6 +124,18 @@ function detectImageType(buffer) {
 	return null;
 }
 
+function readImageHeader(filePath, fileSize) {
+	const headerLength = Math.min(fileSize, 32);
+	const header = Buffer.alloc(headerLength);
+	const descriptor = openSync(filePath, "r");
+	try {
+		const bytesRead = readSync(descriptor, header, 0, headerLength, 0);
+		return header.subarray(0, bytesRead);
+	} finally {
+		closeSync(descriptor);
+	}
+}
+
 export function validateImageFile(filePath) {
 	const config = visionConfig();
 	const resolvedPath = resolve(filePath);
@@ -111,7 +165,7 @@ export function validateImageFile(filePath) {
 		);
 	}
 
-	const header = readFileSync(realPath, { start: 0, end: Math.min(stats.size - 1, 32) });
+	const header = readImageHeader(realPath, stats.size);
 	const type = detectImageType(header);
 	if (!type) {
 		throw new Error(
@@ -156,8 +210,15 @@ export async function sendToVisionModel(prompt, imagePaths = [], options = {}) {
 		model: config.model,
 		messages: [{ role: "user", content }],
 		stream: false,
-		temperature: temperature ?? config.defaultTemperature,
-		max_tokens: maxTokens ?? config.defaultMaxTokens,
+		temperature: configuredNumber(temperature, config.defaultTemperature, {
+			minimum: 0,
+			maximum: 2,
+		}),
+		max_tokens: configuredNumber(maxTokens, config.defaultMaxTokens, {
+			minimum: 1,
+			maximum: 1000000,
+			integer: true,
+		}),
 	};
 
 	if (responseFormat === "json_object") {
@@ -170,16 +231,30 @@ export async function sendToVisionModel(prompt, imagePaths = [], options = {}) {
 		model: config.model,
 		imageCount: imagePaths.length,
 		promptLength: prompt.length,
+		timeoutMs: config.requestTimeoutMs,
 	});
 
-	const response = await fetch(`${config.baseUrl}/chat/completions`, {
-		method: "POST",
-		headers: {
-			Authorization: `Bearer ${config.apiKey}`,
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify(body),
-	});
+	let response;
+	try {
+		response = await fetch(`${config.baseUrl}/chat/completions`, {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${config.apiKey}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify(body),
+			signal: AbortSignal.timeout(config.requestTimeoutMs),
+		});
+	} catch (err) {
+		if (err?.name === "AbortError" || err?.name === "TimeoutError") {
+			const timeoutError = new Error(
+				`${config.providerName} API request timed out after ${config.requestTimeoutMs}ms`,
+			);
+			timeoutError.code = "VISION_API_TIMEOUT";
+			throw timeoutError;
+		}
+		throw err;
+	}
 
 	if (!response.ok) {
 		const errorBody = await response.text();
