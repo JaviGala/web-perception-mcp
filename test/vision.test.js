@@ -118,3 +118,39 @@ test("sendToVisionModel aborts stalled provider requests", async () => {
 		restoreEnv("VISION_TIMEOUT_MS", previousTimeout);
 	}
 });
+
+test("sendToVisionModel normalizes timeouts while reading the response body", async () => {
+	const path = createPng();
+	const previousFetch = globalThis.fetch;
+	const previousApiKey = process.env.VISION_API_KEY;
+	const previousBaseUrl = process.env.VISION_BASE_URL;
+	const previousTimeout = process.env.VISION_TIMEOUT_MS;
+
+	process.env.VISION_API_KEY = "test-key";
+	process.env.VISION_BASE_URL = "https://vision.example/v1";
+	process.env.VISION_TIMEOUT_MS = "10";
+	globalThis.fetch = async (_url, options) => ({
+		ok: true,
+		json: async () => new Promise((resolve, reject) => {
+			const abort = () => reject(options.signal.reason);
+			if (options.signal.aborted) abort();
+			else options.signal.addEventListener("abort", abort, { once: true });
+		}),
+	});
+
+	try {
+		await assert.rejects(
+			() => sendToVisionModel("Describe the image", [path]),
+			(err) => {
+				assert.equal(err.code, "VISION_API_TIMEOUT");
+				assert.match(err.message, /timed out after 10ms/);
+				return true;
+			},
+		);
+	} finally {
+		globalThis.fetch = previousFetch;
+		restoreEnv("VISION_API_KEY", previousApiKey);
+		restoreEnv("VISION_BASE_URL", previousBaseUrl);
+		restoreEnv("VISION_TIMEOUT_MS", previousTimeout);
+	}
+});
