@@ -23,6 +23,10 @@ function restoreEnv(name, previousValue) {
 	else process.env[name] = previousValue;
 }
 
+function keepEventLoopAlive() {
+	return setTimeout(() => {}, 1000);
+}
+
 test("validateImageFile accepts PNG files inside allowed roots", () => {
 	const path = createPng();
 
@@ -92,6 +96,7 @@ test("sendToVisionModel aborts stalled provider requests", async () => {
 	const previousApiKey = process.env.VISION_API_KEY;
 	const previousBaseUrl = process.env.VISION_BASE_URL;
 	const previousTimeout = process.env.VISION_TIMEOUT_MS;
+	const keepAlive = keepEventLoopAlive();
 
 	process.env.VISION_API_KEY = "test-key";
 	process.env.VISION_BASE_URL = "https://vision.example/v1";
@@ -112,6 +117,7 @@ test("sendToVisionModel aborts stalled provider requests", async () => {
 			},
 		);
 	} finally {
+		clearTimeout(keepAlive);
 		globalThis.fetch = previousFetch;
 		restoreEnv("VISION_API_KEY", previousApiKey);
 		restoreEnv("VISION_BASE_URL", previousBaseUrl);
@@ -125,6 +131,7 @@ test("sendToVisionModel normalizes timeouts while reading the response body", as
 	const previousApiKey = process.env.VISION_API_KEY;
 	const previousBaseUrl = process.env.VISION_BASE_URL;
 	const previousTimeout = process.env.VISION_TIMEOUT_MS;
+	const keepAlive = keepEventLoopAlive();
 
 	process.env.VISION_API_KEY = "test-key";
 	process.env.VISION_BASE_URL = "https://vision.example/v1";
@@ -148,6 +155,7 @@ test("sendToVisionModel normalizes timeouts while reading the response body", as
 			},
 		);
 	} finally {
+		clearTimeout(keepAlive);
 		globalThis.fetch = previousFetch;
 		restoreEnv("VISION_API_KEY", previousApiKey);
 		restoreEnv("VISION_BASE_URL", previousBaseUrl);
