@@ -93,3 +93,33 @@ test("takeScreenshot sections returns multiple ordered screenshots", async () =>
 		await closeBrowser();
 	}
 });
+
+test("takeScreenshot sections records the browser's actual final scroll position", async () => {
+	let context;
+	try {
+		const launched = await launchBrowser({ viewport: { width: 800, height: 500 } });
+		context = launched.context;
+		const page = launched.page;
+		await page.setContent(`<!doctype html><html><head><style>html,body{margin:0}</style></head><body><main style="height: 1600px">Tall page</main></body></html>`);
+
+		const screenshot = await takeScreenshot(page, {
+			mode: "sections",
+			maxSections: 10,
+			sectionOverlap: 50,
+		});
+
+		const sections = screenshot.metadata.sections;
+		const lastSection = sections.at(-1);
+		const expectedLastY = Math.max(
+			0,
+			screenshot.metadata.dimensions.height - screenshot.metadata.viewport.height,
+		);
+
+		assert.equal(lastSection.y, expectedLastY);
+		assert.equal(new Set(sections.map((section) => section.y)).size, sections.length);
+		assert.equal(lastSection.y + lastSection.height >= screenshot.metadata.dimensions.height, true);
+	} finally {
+		await context?.close().catch(() => {});
+		await closeBrowser();
+	}
+});
