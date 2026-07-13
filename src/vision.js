@@ -7,7 +7,6 @@
 
 import {
 	closeSync,
-	existsSync,
 	openSync,
 	readFileSync,
 	readSync,
@@ -38,6 +37,12 @@ function configuredNumber(value, fallback, options = {}) {
 	const normalized = integer ? Math.trunc(parsed) : parsed;
 	if (normalized < minimum || normalized > maximum) return fallback;
 	return normalized;
+}
+
+function codedError(code, message, cause) {
+	const error = new Error(message, cause ? { cause } : undefined);
+	error.code = code;
+	return error;
 }
 
 function visionConfig() {
@@ -138,37 +143,68 @@ function readImageHeader(filePath, fileSize) {
 
 export function validateImageFile(filePath) {
 	const config = visionConfig();
-	const resolvedPath = resolve(filePath);
-	if (!existsSync(resolvedPath)) {
-		throw new Error(`Image file not found: ${resolvedPath}`);
+	if (
+		typeof filePath !== "string" ||
+		filePath.trim() === "" ||
+		filePath.includes("\0")
+	) {
+		throw codedError("IMAGE_PATH_INVALID", "Image path must be a non-empty string.");
 	}
 
-	const realPath = realpathSync(resolvedPath);
+	const resolvedPath = resolve(filePath);
+	let realPath;
+	try {
+		realPath = realpathSync(resolvedPath);
+	} catch (err) {
+		if (err?.code === "ENOENT") {
+			throw codedError("IMAGE_PATH_NOT_FOUND", `Image file not found: ${resolvedPath}`, err);
+		}
+		throw codedError("IMAGE_FILE_UNREADABLE", `Unable to resolve image path: ${resolvedPath}`, err);
+	}
+
 	const allowedRoots = allowedImageRoots();
 	if (!allowedRoots.some((root) => isInsideRoot(realPath, root))) {
-		throw new Error(
+		throw codedError(
+			"IMAGE_PATH_NOT_ALLOWED",
 			`Image path is outside allowed directories: ${realPath}. ` +
 				`Allowed roots: ${allowedRoots.join(", ")}`,
 		);
 	}
 
-	const stats = statSync(realPath);
+	let stats;
+	try {
+		stats = statSync(realPath);
+	} catch (err) {
+		if (err?.code === "ENOENT") {
+			throw codedError("IMAGE_PATH_NOT_FOUND", `Image file not found: ${realPath}`, err);
+		}
+		throw codedError("IMAGE_FILE_UNREADABLE", `Unable to inspect image file: ${realPath}`, err);
+	}
+
 	if (!stats.isFile()) {
-		throw new Error(`Image path is not a regular file: ${realPath}`);
+		throw codedError("IMAGE_PATH_NOT_REGULAR_FILE", `Image path is not a regular file: ${realPath}`);
 	}
 	if (stats.size <= 0) {
-		throw new Error(`Image file is empty: ${realPath}`);
+		throw codedError("IMAGE_FILE_EMPTY", `Image file is empty: ${realPath}`);
 	}
 	if (stats.size > config.maxImageBytes) {
-		throw new Error(
+		throw codedError(
+			"IMAGE_FILE_TOO_LARGE",
 			`Image file ${realPath} is ${stats.size} bytes, above MAX_IMAGE_BYTES=${config.maxImageBytes}`,
 		);
 	}
 
-	const header = readImageHeader(realPath, stats.size);
+	let header;
+	try {
+		header = readImageHeader(realPath, stats.size);
+	} catch (err) {
+		throw codedError("IMAGE_FILE_UNREADABLE", `Unable to read image file: ${realPath}`, err);
+	}
+
 	const type = detectImageType(header);
 	if (!type) {
-		throw new Error(
+		throw codedError(
+			"IMAGE_TYPE_UNSUPPORTED",
 			`Unsupported or untrusted image file type for ${realPath}. ` +
 				"Allowed formats: PNG, JPEG, GIF, WebP, BMP.",
 		);
@@ -179,7 +215,12 @@ export function validateImageFile(filePath) {
 
 function readFileAsDataUri(filePath) {
 	const image = validateImageFile(filePath);
-	const imageBuffer = readFileSync(image.path);
+	let imageBuffer;
+	try {
+		imageBuffer = readFileSync(image.path);
+	} catch (err) {
+		throw codedError("IMAGE_FILE_UNREADABLE", `Unable to read image file: ${image.path}`, err);
+	}
 	const base64Image = imageBuffer.toString("base64");
 	return `data:${image.mimeType};base64,${base64Image}`;
 }
@@ -195,7 +236,8 @@ export async function sendToVisionModel(prompt, imagePaths = [], options = {}) {
 	}
 
 	if (imagePaths.length > config.maxImagesPerRequest) {
-		throw new Error(
+		throw codedError(
+			"IMAGE_COUNT_LIMIT_EXCEEDED",
 			`Too many images: ${imagePaths.length}. MAX_IMAGES_PER_REQUEST=${config.maxImagesPerRequest}`,
 		);
 	}

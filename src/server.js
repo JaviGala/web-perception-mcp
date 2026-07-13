@@ -428,7 +428,7 @@ async function handleAnalyzePageScreenshot(args = {}) {
 const server = new Server(
 	{
 		name: "web-perception-mcp",
-		version: "0.1.1",
+		version: "0.1.2",
 	},
 	{
 		capabilities: { tools: {} },
