@@ -1,0 +1,50 @@
+name: Commit image error taxonomy
+
+on:
+  push:
+    branches:
+      - agent/release-0.1.2-image-errors
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/release-0.1.2-image-errors
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply embedded implementation script
+        run: |
+          python3 <<'BOOT'
+          from pathlib import Path
+          import textwrap
+
+          workflow = Path(".github/workflows/apply-image-error-taxonomy.yml").read_text()
+          marker = "python3 <<'PY'\n"
+          if marker not in workflow or "\n          PY" not in workflow:
+              raise SystemExit("Could not locate embedded implementation script")
+          script = workflow.split(marker, 1)[1].split("\n          PY", 1)[0]
+          exec(compile(textwrap.dedent(script), "apply-image-error-taxonomy", "exec"))
+          BOOT
+
+      - name: Regenerate package lock metadata
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/vision.js src/server.js test/vision.test.js package.json package-lock.json
+          git commit -m "Add image validation error taxonomy"
+          git push origin HEAD:agent/release-0.1.2-image-errors
