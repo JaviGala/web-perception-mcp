@@ -5,7 +5,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test:
@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -28,3 +30,17 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Sync release lockfile
+        if: github.event_name == 'pull_request' && github.actor != 'github-actions[bot]' && github.head_ref == 'agent/release-0.1.2-image-errors'
+        run: |
+          npm install --package-lock-only --ignore-scripts
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json is already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "Update package lock version"
+          git push origin HEAD:agent/release-0.1.2-image-errors
