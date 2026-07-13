@@ -143,7 +143,11 @@ function readImageHeader(filePath, fileSize) {
 
 export function validateImageFile(filePath) {
 	const config = visionConfig();
-	if (typeof filePath !== "string" || filePath.trim() === "") {
+	if (
+		typeof filePath !== "string" ||
+		filePath.trim() === "" ||
+		filePath.includes("\0")
+	) {
 		throw codedError("IMAGE_PATH_INVALID", "Image path must be a non-empty string.");
 	}
 
@@ -225,16 +229,16 @@ export async function sendToVisionModel(prompt, imagePaths = [], options = {}) {
 	const { responseFormat, temperature, maxTokens } = options;
 	const config = visionConfig();
 
+	if (!config.apiKey) {
+		throw new Error(
+			"No API key found. Set VISION_API_KEY in .env or in your MCP client environment.",
+		);
+	}
+
 	if (imagePaths.length > config.maxImagesPerRequest) {
 		throw codedError(
 			"IMAGE_COUNT_LIMIT_EXCEEDED",
 			`Too many images: ${imagePaths.length}. MAX_IMAGES_PER_REQUEST=${config.maxImagesPerRequest}`,
-		);
-	}
-
-	if (!config.apiKey) {
-		throw new Error(
-			"No API key found. Set VISION_API_KEY in .env or in your MCP client environment.",
 		);
 	}
 

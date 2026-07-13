@@ -37,7 +37,7 @@ test("validateImageFile accepts PNG files inside allowed roots", () => {
 });
 
 test("validateImageFile rejects invalid path values with a stable code", () => {
-	for (const value of ["", "   ", null, 42]) {
+	for (const value of ["", "   ", "image\0.png", null, 42]) {
 		assert.throws(
 			() => validateImageFile(value),
 			(err) => {
