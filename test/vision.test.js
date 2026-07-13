@@ -36,14 +36,113 @@ test("validateImageFile accepts PNG files inside allowed roots", () => {
 	assert.equal(result.size > 0, true);
 });
 
-test("validateImageFile rejects unsupported file signatures", () => {
+test("validateImageFile rejects invalid path values with a stable code", () => {
+	for (const value of ["", "   ", null, 42]) {
+		assert.throws(
+			() => validateImageFile(value),
+			(err) => {
+				assert.equal(err.code, "IMAGE_PATH_INVALID");
+				return true;
+			},
+		);
+	}
+});
+
+test("validateImageFile rejects missing files with a stable code", () => {
+	const dir = mkdtempSync(join(tmpdir(), "web-perception-"));
+	const path = join(dir, "missing.png");
+
+	assert.throws(
+		() => validateImageFile(path),
+		(err) => {
+			assert.equal(err.code, "IMAGE_PATH_NOT_FOUND");
+			return true;
+		},
+	);
+});
+
+test("validateImageFile rejects paths outside configured roots", () => {
+	const allowedDir = mkdtempSync(join(tmpdir(), "web-perception-allowed-"));
+	const outsideDir = mkdtempSync(join(tmpdir(), "web-perception-outside-"));
+	const path = join(outsideDir, "pixel.png");
+	const previousAllowedDirs = process.env.ALLOWED_IMAGE_DIRS;
+	writeFileSync(path, onePixelPng);
+	process.env.ALLOWED_IMAGE_DIRS = allowedDir;
+
+	try {
+		assert.throws(
+			() => validateImageFile(path),
+			(err) => {
+				assert.equal(err.code, "IMAGE_PATH_NOT_ALLOWED");
+				return true;
+			},
+		);
+	} finally {
+		restoreEnv("ALLOWED_IMAGE_DIRS", previousAllowedDirs);
+	}
+});
+
+test("validateImageFile rejects directories with a stable code", () => {
+	const dir = mkdtempSync(join(tmpdir(), "web-perception-"));
+	const previousAllowedDirs = process.env.ALLOWED_IMAGE_DIRS;
+	process.env.ALLOWED_IMAGE_DIRS = dir;
+
+	try {
+		assert.throws(
+			() => validateImageFile(dir),
+			(err) => {
+				assert.equal(err.code, "IMAGE_PATH_NOT_REGULAR_FILE");
+				return true;
+			},
+		);
+	} finally {
+		restoreEnv("ALLOWED_IMAGE_DIRS", previousAllowedDirs);
+	}
+});
+
+test("validateImageFile rejects empty files with a stable code", () => {
+	const dir = mkdtempSync(join(tmpdir(), "web-perception-"));
+	const path = join(dir, "empty.png");
+	writeFileSync(path, Buffer.alloc(0));
+
+	assert.throws(
+		() => validateImageFile(path),
+		(err) => {
+			assert.equal(err.code, "IMAGE_FILE_EMPTY");
+			return true;
+		},
+	);
+});
+
+test("validateImageFile rejects oversized files with a stable code", () => {
+	const path = createPng();
+	const previousMaxBytes = process.env.MAX_IMAGE_BYTES;
+	process.env.MAX_IMAGE_BYTES = "1";
+
+	try {
+		assert.throws(
+			() => validateImageFile(path),
+			(err) => {
+				assert.equal(err.code, "IMAGE_FILE_TOO_LARGE");
+				return true;
+			},
+		);
+	} finally {
+		restoreEnv("MAX_IMAGE_BYTES", previousMaxBytes);
+	}
+});
+
+test("validateImageFile rejects unsupported file signatures with a stable code", () => {
 	const dir = mkdtempSync(join(tmpdir(), "web-perception-"));
 	const path = join(dir, "not-image.png");
 	writeFileSync(path, "not actually an image");
 
 	assert.throws(
 		() => validateImageFile(path),
-		/Unsupported or untrusted image file type/,
+		(err) => {
+			assert.equal(err.code, "IMAGE_TYPE_UNSUPPORTED");
+			return true;
+		},
 	);
 });
 
@@ -87,6 +186,70 @@ test("sendToVisionModel uses configured max tokens unless the call overrides it"
 		restoreEnv("VISION_API_KEY", previousApiKey);
 		restoreEnv("VISION_BASE_URL", previousBaseUrl);
 		restoreEnv("VISION_MAX_TOKENS", previousMaxTokens);
+	}
+});
+
+test("sendToVisionModel rejects excessive image counts before fetch", async () => {
+	const firstPath = createPng();
+	const secondPath = createPng();
+	const previousFetch = globalThis.fetch;
+	const previousApiKey = process.env.VISION_API_KEY;
+	const previousMaxImages = process.env.MAX_IMAGES_PER_REQUEST;
+	let fetchCalls = 0;
+
+	process.env.VISION_API_KEY = "test-key";
+	process.env.MAX_IMAGES_PER_REQUEST = "1";
+	globalThis.fetch = async () => {
+		fetchCalls += 1;
+		throw new Error("fetch should not be called");
+	};
+
+	try {
+		await assert.rejects(
+			() => sendToVisionModel("Describe the images", [firstPath, secondPath]),
+			(err) => {
+				assert.equal(err.code, "IMAGE_COUNT_LIMIT_EXCEEDED");
+				return true;
+			},
+		);
+		assert.equal(fetchCalls, 0);
+	} finally {
+		globalThis.fetch = previousFetch;
+		restoreEnv("VISION_API_KEY", previousApiKey);
+		restoreEnv("MAX_IMAGES_PER_REQUEST", previousMaxImages);
+	}
+});
+
+test("sendToVisionModel preserves validation codes and does not call fetch", async () => {
+	const allowedDir = mkdtempSync(join(tmpdir(), "web-perception-allowed-"));
+	const outsideDir = mkdtempSync(join(tmpdir(), "web-perception-outside-"));
+	const path = join(outsideDir, "pixel.png");
+	const previousFetch = globalThis.fetch;
+	const previousApiKey = process.env.VISION_API_KEY;
+	const previousAllowedDirs = process.env.ALLOWED_IMAGE_DIRS;
+	let fetchCalls = 0;
+
+	writeFileSync(path, onePixelPng);
+	process.env.VISION_API_KEY = "test-key";
+	process.env.ALLOWED_IMAGE_DIRS = allowedDir;
+	globalThis.fetch = async () => {
+		fetchCalls += 1;
+		throw new Error("fetch should not be called");
+	};
+
+	try {
+		await assert.rejects(
+			() => sendToVisionModel("Describe the image", [path]),
+			(err) => {
+				assert.equal(err.code, "IMAGE_PATH_NOT_ALLOWED");
+				return true;
+			},
+		);
+		assert.equal(fetchCalls, 0);
+	} finally {
+		globalThis.fetch = previousFetch;
+		restoreEnv("VISION_API_KEY", previousApiKey);
+		restoreEnv("ALLOWED_IMAGE_DIRS", previousAllowedDirs);
 	}
 });
 
