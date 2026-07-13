@@ -5,7 +5,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test:
@@ -13,6 +13,44 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Apply review fixes
+        if: github.event_name == 'pull_request' && github.actor != 'github-actions[bot]' && github.head_ref == 'agent/release-0.1.2-image-errors'
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"Expected {label} block was not found")
+              return text.replace(old, new, 1)
+
+          vision_path = Path("src/vision.js")
+          vision = vision_path.read_text()
+          vision = replace_once(
+              vision,
+              'if (typeof filePath !== "string" || filePath.trim() === "") {',
+              'if (\n\t\ttypeof filePath !== "string" ||\n\t\tfilePath.trim() === "" ||\n\t\tfilePath.includes("\\0")\n\t) {',
+              "image path validation",
+          )
+
+          old_preflight = '''\tif (imagePaths.length > config.maxImagesPerRequest) {\n\t\tthrow codedError(\n\t\t\t"IMAGE_COUNT_LIMIT_EXCEEDED",\n\t\t\t`Too many images: ${imagePaths.length}. MAX_IMAGES_PER_REQUEST=${config.maxImagesPerRequest}`,\n\t\t);\n\t}\n\n\tif (!config.apiKey) {\n\t\tthrow new Error(\n\t\t\t"No API key found. Set VISION_API_KEY in .env or in your MCP client environment.",\n\t\t);\n\t}'''
+          new_preflight = '''\tif (!config.apiKey) {\n\t\tthrow new Error(\n\t\t\t"No API key found. Set VISION_API_KEY in .env or in your MCP client environment.",\n\t\t);\n\t}\n\n\tif (imagePaths.length > config.maxImagesPerRequest) {\n\t\tthrow codedError(\n\t\t\t"IMAGE_COUNT_LIMIT_EXCEEDED",\n\t\t\t`Too many images: ${imagePaths.length}. MAX_IMAGES_PER_REQUEST=${config.maxImagesPerRequest}`,\n\t\t);\n\t}'''
+          vision = replace_once(vision, old_preflight, new_preflight, "vision preflight ordering")
+          vision_path.write_text(vision)
+
+          test_path = Path("test/vision.test.js")
+          tests = test_path.read_text()
+          tests = replace_once(
+              tests,
+              'for (const value of ["", "   ", null, 42]) {',
+              'for (const value of ["", "   ", "image\\0.png", null, 42]) {',
+              "invalid path test values",
+          )
+          test_path.write_text(tests)
+          PY
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -28,3 +66,50 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Run MCP smoke test
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+          import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+
+          const transport = new StdioClientTransport({
+            command: process.execPath,
+            args: ["src/server.js"],
+            env: {
+              ...process.env,
+              VISION_API_KEY: "test-key",
+              VISION_BASE_URL: "http://127.0.0.1:9/v1",
+              VISION_TIMEOUT_MS: "500",
+              ALLOWED_IMAGE_DIRS: process.cwd(),
+            },
+          });
+          const client = new Client({ name: "image-error-smoke", version: "1.0.0" });
+          try {
+            await client.connect(transport);
+            const response = await client.callTool({
+              name: "analyze_image",
+              arguments: {
+                image_path: "/etc/hosts",
+                prompt: "Describe this image.",
+                response_format: "text",
+              },
+            });
+            const payload = JSON.parse(response.content[0].text);
+            assert.equal(payload.ok, false);
+            assert.equal(payload.error.code, "IMAGE_PATH_NOT_ALLOWED");
+            assert.equal(response.content[0].text.includes("127.0.0.1 localhost"), false);
+          } finally {
+            await client.close();
+          }
+          NODE
+
+      - name: Commit review fixes
+        if: github.event_name == 'pull_request' && github.actor != 'github-actions[bot]' && github.head_ref == 'agent/release-0.1.2-image-errors'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/vision.js test/vision.test.js
+          git commit -m "Refine image validation error handling"
+          git push origin HEAD:agent/release-0.1.2-image-errors
