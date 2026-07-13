@@ -5,7 +5,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -13,8 +13,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -31,16 +29,47 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Sync release lockfile
-        if: github.event_name == 'pull_request' && github.actor != 'github-actions[bot]' && github.head_ref == 'agent/release-0.1.2-image-errors'
+      - name: Run MCP image-validation smoke test
         run: |
-          npm install --package-lock-only --ignore-scripts
-          if git diff --quiet -- package-lock.json; then
-            echo "package-lock.json is already current"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "Update package lock version"
-          git push origin HEAD:agent/release-0.1.2-image-errors
+          node --input-type=module <<'NODE'
+          import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+          import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+
+          const transport = new StdioClientTransport({
+            command: "node",
+            args: ["src/server.js"],
+            env: {
+              ...process.env,
+              VISION_API_KEY: "smoke-test-key",
+              VISION_BASE_URL: "http://127.0.0.1:9/v1",
+              ALLOWED_IMAGE_DIRS: process.cwd(),
+            },
+          });
+          const client = new Client(
+            { name: "image-validation-smoke", version: "1.0.0" },
+            { capabilities: {} },
+          );
+
+          try {
+            await client.connect(transport);
+            const result = await client.callTool({
+              name: "analyze_image",
+              arguments: {
+                image_path: "/etc/hosts",
+                prompt: "Describe this image.",
+                response_format: "text",
+              },
+            });
+            const payload = JSON.parse(result.content[0].text);
+            if (payload.ok !== false || payload.error?.code !== "IMAGE_PATH_NOT_ALLOWED") {
+              throw new Error(`Unexpected MCP response: ${JSON.stringify(result)}`);
+            }
+            const serialized = JSON.stringify(result);
+            if (serialized.includes("127.0.0.1") || serialized.includes("localhost")) {
+              throw new Error("Rejected file contents may have been exposed");
+            }
+            console.log(JSON.stringify(payload));
+          } finally {
+            await client.close();
+          }
+          NODE
