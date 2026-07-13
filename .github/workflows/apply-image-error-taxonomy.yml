@@ -1,0 +1,386 @@
+name: Apply image error taxonomy
+
+on:
+  push:
+    branches:
+      - agent/release-0.1.2-image-errors
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/release-0.1.2-image-errors
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply focused changes
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"Expected {label} block was not found")
+              return text.replace(old, new, 1)
+
+          vision_path = Path("src/vision.js")
+          vision = vision_path.read_text()
+          vision = replace_once(vision, "\texistsSync,\n", "", "existsSync import")
+          vision = replace_once(
+              vision,
+              "}\n\nfunction visionConfig()",
+              '''}\n\nfunction codedError(code, message, cause) {\n\tconst error = new Error(message, cause ? { cause } : undefined);\n\terror.code = code;\n\treturn error;\n}\n\nfunction visionConfig()''',
+              "coded error helper insertion",
+          )
+
+          validation_start = vision.index("export function validateImageFile(filePath) {")
+          validation_end = vision.index("\n\nexport async function sendToVisionModel", validation_start)
+          validation_block = r'''export function validateImageFile(filePath) {
+	const config = visionConfig();
+	if (typeof filePath !== "string" || filePath.trim() === "") {
+		throw codedError("IMAGE_PATH_INVALID", "Image path must be a non-empty string.");
+	}
+
+	const resolvedPath = resolve(filePath);
+	let realPath;
+	try {
+		realPath = realpathSync(resolvedPath);
+	} catch (err) {
+		if (err?.code === "ENOENT") {
+			throw codedError("IMAGE_PATH_NOT_FOUND", `Image file not found: ${resolvedPath}`, err);
+		}
+		throw codedError("IMAGE_FILE_UNREADABLE", `Unable to resolve image path: ${resolvedPath}`, err);
+	}
+
+	const allowedRoots = allowedImageRoots();
+	if (!allowedRoots.some((root) => isInsideRoot(realPath, root))) {
+		throw codedError(
+			"IMAGE_PATH_NOT_ALLOWED",
+			`Image path is outside allowed directories: ${realPath}. ` +
+				`Allowed roots: ${allowedRoots.join(", ")}`,
+		);
+	}
+
+	let stats;
+	try {
+		stats = statSync(realPath);
+	} catch (err) {
+		if (err?.code === "ENOENT") {
+			throw codedError("IMAGE_PATH_NOT_FOUND", `Image file not found: ${realPath}`, err);
+		}
+		throw codedError("IMAGE_FILE_UNREADABLE", `Unable to inspect image file: ${realPath}`, err);
+	}
+
+	if (!stats.isFile()) {
+		throw codedError("IMAGE_PATH_NOT_REGULAR_FILE", `Image path is not a regular file: ${realPath}`);
+	}
+	if (stats.size <= 0) {
+		throw codedError("IMAGE_FILE_EMPTY", `Image file is empty: ${realPath}`);
+	}
+	if (stats.size > config.maxImageBytes) {
+		throw codedError(
+			"IMAGE_FILE_TOO_LARGE",
+			`Image file ${realPath} is ${stats.size} bytes, above MAX_IMAGE_BYTES=${config.maxImageBytes}`,
+		);
+	}
+
+	let header;
+	try {
+		header = readImageHeader(realPath, stats.size);
+	} catch (err) {
+		throw codedError("IMAGE_FILE_UNREADABLE", `Unable to read image file: ${realPath}`, err);
+	}
+
+	const type = detectImageType(header);
+	if (!type) {
+		throw codedError(
+			"IMAGE_TYPE_UNSUPPORTED",
+			`Unsupported or untrusted image file type for ${realPath}. ` +
+				"Allowed formats: PNG, JPEG, GIF, WebP, BMP.",
+		);
+	}
+
+	return { path: realPath, size: stats.size, mimeType: type.mime, ext: type.ext };
+}
+
+function readFileAsDataUri(filePath) {
+	const image = validateImageFile(filePath);
+	let imageBuffer;
+	try {
+		imageBuffer = readFileSync(image.path);
+	} catch (err) {
+		throw codedError("IMAGE_FILE_UNREADABLE", `Unable to read image file: ${image.path}`, err);
+	}
+	const base64Image = imageBuffer.toString("base64");
+	return `data:${image.mimeType};base64,${base64Image}`;
+}'''
+          vision = vision[:validation_start] + validation_block + vision[validation_end:]
+
+          old_preflight = '''\tif (!config.apiKey) {\n\t\tthrow new Error(\n\t\t\t"No API key found. Set VISION_API_KEY in .env or in your MCP client environment.",\n\t\t);\n\t}\n\n\tif (imagePaths.length > config.maxImagesPerRequest) {\n\t\tthrow new Error(\n\t\t\t`Too many images: ${imagePaths.length}. MAX_IMAGES_PER_REQUEST=${config.maxImagesPerRequest}`,\n\t\t);\n\t}'''
+          new_preflight = '''\tif (imagePaths.length > config.maxImagesPerRequest) {\n\t\tthrow codedError(\n\t\t\t"IMAGE_COUNT_LIMIT_EXCEEDED",\n\t\t\t`Too many images: ${imagePaths.length}. MAX_IMAGES_PER_REQUEST=${config.maxImagesPerRequest}`,\n\t\t);\n\t}\n\n\tif (!config.apiKey) {\n\t\tthrow new Error(\n\t\t\t"No API key found. Set VISION_API_KEY in .env or in your MCP client environment.",\n\t\t);\n\t}'''
+          vision = replace_once(vision, old_preflight, new_preflight, "vision preflight")
+          vision_path.write_text(vision)
+
+          test_path = Path("test/vision.test.js")
+          tests = test_path.read_text()
+          old_validation_tests = '''test("validateImageFile rejects unsupported file signatures", () => {\n\tconst dir = mkdtempSync(join(tmpdir(), "web-perception-"));\n\tconst path = join(dir, "not-image.png");\n\twriteFileSync(path, "not actually an image");\n\n\tassert.throws(\n\t\t() => validateImageFile(path),\n\t\t/Unsupported or untrusted image file type/,\n\t);\n});'''
+          new_validation_tests = r'''test("validateImageFile rejects invalid path values with a stable code", () => {
+	assert.throws(
+		() => validateImageFile(""),
+		(err) => {
+			assert.equal(err.code, "IMAGE_PATH_INVALID");
+			return true;
+		},
+	);
+});
+
+test("validateImageFile rejects missing files with a stable code", () => {
+	const dir = mkdtempSync(join(tmpdir(), "web-perception-"));
+	const path = join(dir, "missing.png");
+
+	assert.throws(
+		() => validateImageFile(path),
+		(err) => {
+			assert.equal(err.code, "IMAGE_PATH_NOT_FOUND");
+			return true;
+		},
+	);
+});
+
+test("validateImageFile rejects paths outside configured roots", () => {
+	const allowedDir = mkdtempSync(join(tmpdir(), "web-perception-allowed-"));
+	const outsideDir = mkdtempSync(join(tmpdir(), "web-perception-outside-"));
+	const path = join(outsideDir, "pixel.png");
+	const previousAllowedDirs = process.env.ALLOWED_IMAGE_DIRS;
+	writeFileSync(path, onePixelPng);
+	process.env.ALLOWED_IMAGE_DIRS = allowedDir;
+
+	try {
+		assert.throws(
+			() => validateImageFile(path),
+			(err) => {
+				assert.equal(err.code, "IMAGE_PATH_NOT_ALLOWED");
+				return true;
+			},
+		);
+	} finally {
+		restoreEnv("ALLOWED_IMAGE_DIRS", previousAllowedDirs);
+	}
+});
+
+test("validateImageFile rejects directories with a stable code", () => {
+	const dir = mkdtempSync(join(tmpdir(), "web-perception-"));
+	const previousAllowedDirs = process.env.ALLOWED_IMAGE_DIRS;
+	process.env.ALLOWED_IMAGE_DIRS = dir;
+
+	try {
+		assert.throws(
+			() => validateImageFile(dir),
+			(err) => {
+				assert.equal(err.code, "IMAGE_PATH_NOT_REGULAR_FILE");
+				return true;
+			},
+		);
+	} finally {
+		restoreEnv("ALLOWED_IMAGE_DIRS", previousAllowedDirs);
+	}
+});
+
+test("validateImageFile rejects empty files with a stable code", () => {
+	const dir = mkdtempSync(join(tmpdir(), "web-perception-"));
+	const path = join(dir, "empty.png");
+	writeFileSync(path, Buffer.alloc(0));
+
+	assert.throws(
+		() => validateImageFile(path),
+		(err) => {
+			assert.equal(err.code, "IMAGE_FILE_EMPTY");
+			return true;
+		},
+	);
+});
+
+test("validateImageFile rejects oversized files with a stable code", () => {
+	const path = createPng();
+	const previousMaxBytes = process.env.MAX_IMAGE_BYTES;
+	process.env.MAX_IMAGE_BYTES = "1";
+
+	try {
+		assert.throws(
+			() => validateImageFile(path),
+			(err) => {
+				assert.equal(err.code, "IMAGE_FILE_TOO_LARGE");
+				return true;
+			},
+		);
+	} finally {
+		restoreEnv("MAX_IMAGE_BYTES", previousMaxBytes);
+	}
+});
+
+test("validateImageFile rejects unsupported file signatures with a stable code", () => {
+	const dir = mkdtempSync(join(tmpdir(), "web-perception-"));
+	const path = join(dir, "not-image.png");
+	writeFileSync(path, "not actually an image");
+
+	assert.throws(
+		() => validateImageFile(path),
+		(err) => {
+			assert.equal(err.code, "IMAGE_TYPE_UNSUPPORTED");
+			return true;
+		},
+	);
+});'''
+          tests = replace_once(tests, old_validation_tests, new_validation_tests, "validation tests")
+
+          count_tests_marker = '\n\ntest("sendToVisionModel aborts stalled provider requests", async () => {'
+          count_tests = r'''
+
+test("sendToVisionModel rejects excessive image counts before fetch", async () => {
+	const firstPath = createPng();
+	const secondPath = createPng();
+	const previousFetch = globalThis.fetch;
+	const previousApiKey = process.env.VISION_API_KEY;
+	const previousMaxImages = process.env.MAX_IMAGES_PER_REQUEST;
+	let fetchCalls = 0;
+
+	process.env.VISION_API_KEY = "test-key";
+	process.env.MAX_IMAGES_PER_REQUEST = "1";
+	globalThis.fetch = async () => {
+		fetchCalls += 1;
+		throw new Error("fetch should not be called");
+	};
+
+	try {
+		await assert.rejects(
+			() => sendToVisionModel("Describe the images", [firstPath, secondPath]),
+			(err) => {
+				assert.equal(err.code, "IMAGE_COUNT_LIMIT_EXCEEDED");
+				return true;
+			},
+		);
+		assert.equal(fetchCalls, 0);
+	} finally {
+		globalThis.fetch = previousFetch;
+		restoreEnv("VISION_API_KEY", previousApiKey);
+		restoreEnv("MAX_IMAGES_PER_REQUEST", previousMaxImages);
+	}
+});
+
+test("sendToVisionModel preserves validation codes and does not call fetch", async () => {
+	const allowedDir = mkdtempSync(join(tmpdir(), "web-perception-allowed-"));
+	const outsideDir = mkdtempSync(join(tmpdir(), "web-perception-outside-"));
+	const path = join(outsideDir, "pixel.png");
+	const previousFetch = globalThis.fetch;
+	const previousApiKey = process.env.VISION_API_KEY;
+	const previousAllowedDirs = process.env.ALLOWED_IMAGE_DIRS;
+	let fetchCalls = 0;
+
+	writeFileSync(path, onePixelPng);
+	process.env.VISION_API_KEY = "test-key";
+	process.env.ALLOWED_IMAGE_DIRS = allowedDir;
+	globalThis.fetch = async () => {
+		fetchCalls += 1;
+		throw new Error("fetch should not be called");
+	};
+
+	try {
+		await assert.rejects(
+			() => sendToVisionModel("Describe the image", [path]),
+			(err) => {
+				assert.equal(err.code, "IMAGE_PATH_NOT_ALLOWED");
+				return true;
+			},
+		);
+		assert.equal(fetchCalls, 0);
+	} finally {
+		globalThis.fetch = previousFetch;
+		restoreEnv("VISION_API_KEY", previousApiKey);
+		restoreEnv("ALLOWED_IMAGE_DIRS", previousAllowedDirs);
+	}
+});'''
+          if count_tests_marker not in tests:
+              raise SystemExit("Expected timeout test marker was not found")
+          tests = tests.replace(count_tests_marker, count_tests + count_tests_marker, 1)
+          test_path.write_text(tests)
+
+          package_path = Path("package.json")
+          package = replace_once(package_path.read_text(), '"version": "0.1.1"', '"version": "0.1.2"', "package version")
+          package_path.write_text(package)
+
+          server_path = Path("src/server.js")
+          server = replace_once(server_path.read_text(), 'version: "0.1.1"', 'version: "0.1.2"', "server version")
+          server_path.write_text(server)
+          PY
+
+      - name: Regenerate package lock metadata
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run MCP smoke test
+        run: |
+          node --input-type=module <<'NODE'
+          import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+          import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+
+          const transport = new StdioClientTransport({
+            command: "node",
+            args: ["src/server.js"],
+            env: {
+              ...process.env,
+              VISION_API_KEY: "smoke-test-key",
+              VISION_BASE_URL: "http://127.0.0.1:9/v1",
+              ALLOWED_IMAGE_DIRS: process.cwd(),
+            },
+          });
+          const client = new Client({ name: "image-error-smoke", version: "1.0.0" }, { capabilities: {} });
+
+          try {
+            await client.connect(transport);
+            const result = await client.callTool({
+              name: "analyze_image",
+              arguments: {
+                image_path: "/etc/hosts",
+                prompt: "Describe this image.",
+                response_format: "text",
+              },
+            });
+            const serialized = JSON.stringify(result);
+            if (!serialized.includes("IMAGE_PATH_NOT_ALLOWED")) {
+              throw new Error(`Unexpected MCP result: ${serialized}`);
+            }
+            if (serialized.includes("localhost") || serialized.includes("127.0.0.1")) {
+              throw new Error("Rejected file contents may have been exposed");
+            }
+            console.log(serialized);
+          } finally {
+            await client.close();
+          }
+          NODE
+
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/vision.js src/server.js test/vision.test.js package.json package-lock.json
+          git commit -m "Add image validation error taxonomy"
+          git push origin HEAD:agent/release-0.1.2-image-errors
