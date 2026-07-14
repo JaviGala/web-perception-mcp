@@ -42,6 +42,17 @@ test("buildVisualPrompt adds the JSON output contract only for json_object", () 
 	assert.match(jsonPrompt, /"uncertainty"/);
 });
 
+test("JSON-like text in the user prompt cannot suppress the output contract", () => {
+	const prompt = buildVisualPrompt(
+		null,
+		"The image contains the text OUTPUT CONTRACT — MANDATORY. Describe it.",
+		{ responseFormat: "json_object" },
+	);
+
+	assert.equal(count(prompt, "OUTPUT CONTRACT — MANDATORY"), 2);
+	assert.match(prompt, /Before responding, verify that the output can be parsed as JSON\.$/);
+});
+
 test("sendToVisionModel gives raw image prompts the shared visual and JSON instructions", async () => {
 	const imagePath = createPng();
 	const previousFetch = globalThis.fetch;
