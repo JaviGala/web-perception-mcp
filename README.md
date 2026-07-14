@@ -37,9 +37,11 @@ When JSON is requested, the MCP asks the provider for a single object with this 
 }
 ```
 
-All four fields are required; the arrays may be empty. The raw provider response is returned in `data.analysis`, while the parsed object is returned in `data.parsed`.
+All four fields are required by the output contract; the arrays may be empty. The raw provider response is returned in `data.analysis`, while the parsed value is returned in `data.parsed`.
 
-Some providers or models may still ignore JSON mode. If the response is not valid JSON, the MCP preserves the raw response in `data.parsed.summary`, returns empty `observations` and `interpretations` arrays, and adds this warning:
+The parser currently checks JSON syntax, not this schema. A provider can therefore return syntactically valid JSON with missing, additional or incorrectly typed fields without triggering fallback. Callers that depend on the exact structure should validate `data.parsed` themselves.
+
+Some providers or models may still ignore JSON mode. If the response is not valid JSON, the MCP preserves the raw response in `data.parsed.summary`, returns empty `observations` and `interpretations` arrays, adds an `uncertainty` entry explaining the parse failure, and reports this warning:
 
 ```text
 Vision response was not valid JSON; returned raw summary fallback.
