@@ -18,6 +18,25 @@ import { resolve } from "node:path";
 import { safeLog } from "./security.js";
 import { appTempDir, isInsideRoot, screenshotOutputDir } from "./paths.js";
 
+const JSON_OUTPUT_CONTRACT = [
+	"OUTPUT FORMAT — MANDATORY",
+	"",
+	"Return only valid JSON. Do not use Markdown, code fences, or text outside the object.",
+	"",
+	"Use exactly this structure:",
+	'{',
+	'  "summary": "string",',
+	'  "observations": ["string"],',
+	'  "interpretations": ["string"],',
+	'  "uncertainty": ["string"]',
+	'}',
+	"",
+	"All four fields are required. Arrays may be empty.",
+	"Use only evidence visible in the image or supplied context.",
+	"Keep observations separate from interpretations.",
+	"Before responding, verify that the result parses as JSON.",
+].join("\n");
+
 function firstEnv(names, defaultValue = "") {
 	for (const name of names) {
 		const value = process.env[name];
@@ -225,6 +244,11 @@ function readFileAsDataUri(filePath) {
 	return `data:${image.mimeType};base64,${base64Image}`;
 }
 
+function appendResponseFormatInstructions(prompt, responseFormat) {
+	if (responseFormat !== "json_object") return prompt;
+	return `${prompt}\n\n${JSON_OUTPUT_CONTRACT}`;
+}
+
 export async function sendToVisionModel(prompt, imagePaths = [], options = {}) {
 	const { responseFormat, temperature, maxTokens } = options;
 	const config = visionConfig();
@@ -242,7 +266,8 @@ export async function sendToVisionModel(prompt, imagePaths = [], options = {}) {
 		);
 	}
 
-	const content = [{ type: "text", text: prompt }];
+	const requestPrompt = appendResponseFormatInstructions(prompt, responseFormat);
+	const content = [{ type: "text", text: requestPrompt }];
 	for (const imagePath of imagePaths) {
 		const dataUri = readFileAsDataUri(imagePath);
 		content.push({ type: "image_url", image_url: { url: dataUri } });
@@ -272,7 +297,7 @@ export async function sendToVisionModel(prompt, imagePaths = [], options = {}) {
 		baseUrl: config.baseUrl,
 		model: config.model,
 		imageCount: imagePaths.length,
-		promptLength: prompt.length,
+		promptLength: requestPrompt.length,
 		timeoutMs: config.requestTimeoutMs,
 	});
 
@@ -372,16 +397,21 @@ export function parseVisualResult(rawText) {
 	}
 
 	const stripped = rawText
-		.replace(/^```json\s*/i, "")
-		.replace(/^```\s*/i, "")
-		.replace(/```$/i, "")
+		.trim()
+		.replace(/^```(?:json)?\s*/i, "")
+		.replace(/\s*```$/i, "")
 		.trim();
 
 	try {
 		return { findings: JSON.parse(stripped), raw: rawText, usedFallback: false };
 	} catch {
 		return {
-			findings: { summary: rawText, observations: [], uncertainty: ["Vision response was not valid JSON."] },
+			findings: {
+				summary: rawText,
+				observations: [],
+				interpretations: [],
+				uncertainty: ["Vision response was not valid JSON."],
+			},
 			raw: rawText,
 			usedFallback: true,
 			warning: "Vision response was not valid JSON; returned raw summary fallback.",

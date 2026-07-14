@@ -1,6 +1,6 @@
 {
 	"name": "web-perception-mcp",
-	"version": "0.1.2",
+	"version": "0.1.3",
 	"description": "Delegated vision MCP server for images and webpage screenshots",
 	"type": "module",
 	"private": true,
