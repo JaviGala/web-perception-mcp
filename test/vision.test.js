@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { sendToVisionModel, validateImageFile } from "../src/vision.js";
+import { buildVisualPrompt, sendToVisionModel, validateImageFile } from "../src/vision.js";
 
 const onePixelPng = Buffer.from(
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lzMZVwAAAABJRU5ErkJggg==",
@@ -25,6 +25,10 @@ function restoreEnv(name, previousValue) {
 
 function keepEventLoopAlive() {
 	return setTimeout(() => {}, 1000);
+}
+
+function count(text, fragment) {
+	return text.split(fragment).length - 1;
 }
 
 test("validateImageFile accepts PNG files inside allowed roots", () => {
@@ -323,5 +327,52 @@ test("sendToVisionModel normalizes timeouts while reading the response body", as
 		restoreEnv("VISION_API_KEY", previousApiKey);
 		restoreEnv("VISION_BASE_URL", previousBaseUrl);
 		restoreEnv("VISION_TIMEOUT_MS", previousTimeout);
+	}
+});
+
+test("buildVisualPrompt applies the shared visual and security instructions", () => {
+	const prompt = buildVisualPrompt(null, "Describe the image");
+
+	assert.match(prompt, /^You are a vision-capable analysis model/);
+	assert.match(prompt, /SECURITY BOUNDARY:/);
+	assert.match(prompt, /USER QUESTION:\nDescribe the image/);
+	assert.match(prompt, /Separate direct visual observations from interpretation/);
+	assert.doesNotMatch(prompt, /OUTPUT FORMAT — MANDATORY/);
+});
+
+test("sendToVisionModel appends one JSON contract after all visual context", async () => {
+	const path = createPng();
+	const previousFetch = globalThis.fetch;
+	const previousApiKey = process.env.VISION_API_KEY;
+	const previousBaseUrl = process.env.VISION_BASE_URL;
+	let body;
+
+	process.env.VISION_API_KEY = "test-key";
+	process.env.VISION_BASE_URL = "https://vision.example/v1";
+	globalThis.fetch = async (_url, options) => {
+		body = JSON.parse(options.body);
+		return new Response(
+			JSON.stringify({ choices: [{ message: { content: "{}" } }], usage: null }),
+			{ status: 200, headers: { "Content-Type": "application/json" } },
+		);
+	};
+
+	const prompt = `${buildVisualPrompt(
+		{ url: "https://example.com", title: "Example Domain" },
+		"Describe the visible interface",
+	)}\n\nSCREENSHOT SEGMENTS:\n- Section 1: y=0, height=900`;
+
+	try {
+		await sendToVisionModel(prompt, [path], { responseFormat: "json_object" });
+
+		const sentPrompt = body.messages[0].content[0].text;
+		assert.equal(count(sentPrompt, "OUTPUT FORMAT — MANDATORY"), 1);
+		assert.ok(sentPrompt.indexOf("SCREENSHOT SEGMENTS:") < sentPrompt.indexOf("OUTPUT FORMAT — MANDATORY"));
+		assert.match(sentPrompt, /Before responding, verify that the result parses as JSON\.$/);
+		assert.deepEqual(body.response_format, { type: "json_object" });
+	} finally {
+		globalThis.fetch = previousFetch;
+		restoreEnv("VISION_API_KEY", previousApiKey);
+		restoreEnv("VISION_BASE_URL", previousBaseUrl);
 	}
 });
