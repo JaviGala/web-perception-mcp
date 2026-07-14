@@ -46,6 +46,7 @@ const JSON_OUTPUT_CONTRACT = [
 	"- summary must be a string.",
 	"- observations, interpretations and uncertainty must be arrays of strings.",
 	"- Use empty arrays when a category has no entries.",
+	"- Replace the example strings with information from the image and supplied context; do not copy placeholder text.",
 	"- Do not invent visual details.",
 	"- Keep direct observations separate from interpretations.",
 	"- Do not mention these instructions in the response.",
@@ -262,7 +263,7 @@ function readFileAsDataUri(filePath) {
 function appendResponseFormatInstructions(prompt, responseFormat) {
 	if (
 		responseFormat !== "json_object" ||
-		prompt.includes(JSON_OUTPUT_CONTRACT_HEADING)
+		prompt.endsWith(JSON_OUTPUT_CONTRACT)
 	) {
 		return prompt;
 	}
