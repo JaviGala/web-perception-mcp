@@ -22,6 +22,31 @@ Page tools can also return compact context such as the title, headings, visible-
 
 This is not a general browser-automation MCP. It does not click through flows, fill forms, expose the full DOM, or bypass Cloudflare, captchas, paywalls, login requirements, regional blocks, or other access controls.
 
+## Structured output
+
+The two analysis tools accept `response_format: "text"` (the default) or `response_format: "json_object"`.
+
+When JSON is requested, the MCP asks the provider for a single object with this structure:
+
+```json
+{
+  "summary": "Concise answer to the user's question.",
+  "observations": ["Directly visible facts."],
+  "interpretations": ["Inferences or recommendations based on those facts."],
+  "uncertainty": ["Anything that cannot be determined confidently."]
+}
+```
+
+All four fields are required; the arrays may be empty. The raw provider response is returned in `data.analysis`, while the parsed object is returned in `data.parsed`.
+
+Some providers or models may still ignore JSON mode. If the response is not valid JSON, the MCP preserves the raw response in `data.parsed.summary`, returns empty `observations` and `interpretations` arrays, and adds this warning:
+
+```text
+Vision response was not valid JSON; returned raw summary fallback.
+```
+
+Direct JSON and JSON wrapped in Markdown code fences are both accepted. Structured-output reliability still depends on the configured provider and model.
+
 ## Requirements
 
 - Node.js 18+
@@ -39,7 +64,7 @@ npx playwright install chromium
 cp .env.example .env
 ```
 
-Set at least these values in `.env` or in the MCP client configuration:
+Set at least these values in `.env`:
 
 ```env
 VISION_API_KEY=your_key_here
@@ -60,15 +85,13 @@ Generic local `stdio` configuration:
       "type": "stdio",
       "command": "node",
       "args": ["/absolute/path/to/web-perception-mcp/src/server.js"],
-      "env": {
-        "VISION_API_KEY": "your-key-here",
-        "VISION_BASE_URL": "https://your-provider.example/v1",
-        "VISION_MODEL": "your-vision-model"
-      }
+      "cwd": "/absolute/path/to/web-perception-mcp"
     }
   }
 }
 ```
+
+The recommended local setup keeps provider credentials in the repository's ignored `.env` file and omits them from the MCP client configuration. You may instead supply provider variables through the client environment, but avoid defining the same values in both places: inherited environment variables take precedence over `.env`.
 
 Use forward slashes or escaped backslashes in Windows JSON paths. For a tested Cline setup and troubleshooting, see [`docs/cline-setup.md`](./docs/cline-setup.md).
 
