@@ -4,7 +4,12 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { buildVisualPrompt, sendToVisionModel, validateImageFile } from "../src/vision.js";
+import {
+	buildVisualPrompt,
+	parseVisualResult,
+	sendToVisionModel,
+	validateImageFile,
+} from "../src/vision.js";
 
 const onePixelPng = Buffer.from(
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lzMZVwAAAABJRU5ErkJggg==",
@@ -185,6 +190,8 @@ test("sendToVisionModel uses configured max tokens unless the call overrides it"
 		await sendToVisionModel("Describe the image", [path], { maxTokens: 321 });
 		assert.equal(bodies[0].max_tokens, 4321);
 		assert.equal(bodies[1].max_tokens, 321);
+		assert.equal(bodies[0].messages[0].content[0].text, "Describe the image");
+		assert.equal("response_format" in bodies[0], false);
 	} finally {
 		globalThis.fetch = previousFetch;
 		restoreEnv("VISION_API_KEY", previousApiKey);
@@ -375,4 +382,16 @@ test("sendToVisionModel appends one JSON contract after all visual context", asy
 		restoreEnv("VISION_API_KEY", previousApiKey);
 		restoreEnv("VISION_BASE_URL", previousBaseUrl);
 	}
+});
+
+test("parseVisualResult fallback matches the structured output contract", () => {
+	const result = parseVisualResult("# Markdown response");
+
+	assert.equal(result.usedFallback, true);
+	assert.deepEqual(result.findings, {
+		summary: "# Markdown response",
+		observations: [],
+		interpretations: [],
+		uncertainty: ["Vision response was not valid JSON."],
+	});
 });
