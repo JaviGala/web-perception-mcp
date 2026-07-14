@@ -61,7 +61,7 @@ Use absolute paths. Do not use `~` or relative paths in the MCP config.
 }
 ```
 
-The `cwd` value matters because the server loads `.env` from the repository root. Replace `/absolute/path/to/web-perception-mcp` with the real path to your local clone.
+The server locates `.env` relative to `src/server.js`, so the `args` path must point to the intended clone. Setting `cwd` to the repository root is also recommended because it keeps project-relative behaviour, default image roots and diagnostics aligned with that clone.
 
 On Windows, use forward slashes or escaped backslashes in JSON strings:
 
@@ -143,9 +143,11 @@ To verify JSON output, repeat the analysis with:
 Expected result:
 
 - `data.analysis` contains the raw provider response.
-- `data.parsed` contains exactly `summary`, `observations`, `interpretations` and `uncertainty`.
+- `data.parsed` contains `summary`, `observations`, `interpretations` and `uncertainty`.
 - `summary` is a string and the other fields are arrays of strings.
 - No invalid-JSON fallback warning appears when the provider follows the requested format.
+
+The MCP parser checks JSON syntax but does not yet enforce this schema. Inspect the keys and value types when your workflow depends on structured output; valid JSON with the wrong shape will not trigger fallback.
 
 If the provider returns invalid JSON, the MCP preserves the raw response in `data.parsed.summary` and reports:
 
@@ -186,8 +188,8 @@ Check:
 
 Check:
 
-- `.env` exists in the repository root and is not named `.env.txt` or similar.
-- `cwd` points to that repository root.
+- `.env` exists in the repository root next to `package.json` and is not named `.env.txt` or similar.
+- The configured `args` path points to `src/server.js` in that same clone.
 - `VISION_API_KEY` is present and valid.
 - `VISION_BASE_URL` points to the correct OpenAI-style `/chat/completions` provider base URL.
 - `VISION_MODEL` is a vision-capable model available to your account.
