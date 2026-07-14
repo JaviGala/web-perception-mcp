@@ -318,7 +318,8 @@ async function handleAnalyzeImage(args = {}) {
 	if (args.max_tokens !== undefined) options.maxTokens = args.max_tokens;
 
 	try {
-		const result = await sendToVisionModel(args.prompt, imagePaths, options);
+		const prompt = buildVisualPrompt(null, args.prompt);
+		const result = await sendToVisionModel(prompt, imagePaths, options);
 		const parsed = args.response_format === "json_object" ? parseVisualResult(result.content) : null;
 		return successResponse(
 			{ analysis: result.content, parsed: parsed?.findings || null, usage: result.usage },
