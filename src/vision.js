@@ -375,10 +375,10 @@ export function buildVisualPrompt(pageContext, userPrompt) {
 				const pos = el.bbox ? ` at (${el.bbox.x},${el.bbox.y},${el.bbox.w}x${el.bbox.h})` : "";
 				parts.push(`- ${el.ref}: ${el.tag}/${el.role} "${name}"${pos}`);
 			}
+		}
 
-			if (pageContext.visible_text_excerpt) {
-				parts.push("", "Visible text excerpt:", pageContext.visible_text_excerpt.slice(0, 1200));
-			}
+		if (pageContext.visible_text_excerpt) {
+			parts.push("", "Visible text excerpt:", pageContext.visible_text_excerpt.slice(0, 1200));
 		}
 	}
 
