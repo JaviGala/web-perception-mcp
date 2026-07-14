@@ -406,7 +406,12 @@ export function parseVisualResult(rawText) {
 		return { findings: JSON.parse(stripped), raw: rawText, usedFallback: false };
 	} catch {
 		return {
-			findings: { summary: rawText, observations: [], uncertainty: ["Vision response was not valid JSON."] },
+			findings: {
+				summary: rawText,
+				observations: [],
+				interpretations: [],
+				uncertainty: ["Vision response was not valid JSON."],
+			},
 			raw: rawText,
 			usedFallback: true,
 			warning: "Vision response was not valid JSON; returned raw summary fallback.",
