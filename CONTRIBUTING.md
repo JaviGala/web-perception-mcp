@@ -16,6 +16,19 @@ npm test
 
 Do not use real API keys in tests. Provider requests should be mocked unless a deliberately manual integration test is being performed outside the committed test suite.
 
+### Manual provider integration tests
+
+Keep manual tests small and reproducible:
+
+- make real provider calls only through a fresh MCP `stdio` process; never call the provider directly from the harness;
+- verify the live MCP server name and version before making provider calls;
+- let the MCP server load the ignored `.env` file normally; the harness must not open, parse, copy or print it;
+- never search for, inspect, log or expose credential values in the harness or report;
+- when testing `.env` as the sole provider-configuration source, copy the child process environment without logging values and remove inherited provider variables by name;
+- use unique temporary screenshot directories and remove all harnesses and generated images afterwards.
+
+Manual reports, provider responses and screenshots may contain private page content. Do not commit them unless they have been deliberately reviewed and sanitised.
+
 ## Project structure
 
 ```text

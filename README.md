@@ -22,6 +22,33 @@ Page tools can also return compact context such as the title, headings, visible-
 
 This is not a general browser-automation MCP. It does not click through flows, fill forms, expose the full DOM, or bypass Cloudflare, captchas, paywalls, login requirements, regional blocks, or other access controls.
 
+## Structured output
+
+The two analysis tools accept `response_format: "text"` (the default) or `response_format: "json_object"`.
+
+When JSON is requested, the MCP asks the provider for a single object with this structure:
+
+```json
+{
+  "summary": "Concise answer to the user's question.",
+  "observations": ["Directly visible facts."],
+  "interpretations": ["Inferences or recommendations based on those facts."],
+  "uncertainty": ["Anything that cannot be determined confidently."]
+}
+```
+
+All four fields are required by the output contract; the arrays may be empty. The raw provider response is returned in `data.analysis`, while the parsed value is returned in `data.parsed`.
+
+The parser currently checks JSON syntax, not this schema. A provider can therefore return syntactically valid JSON with missing, additional or incorrectly typed fields without triggering fallback. Callers that depend on the exact structure should validate `data.parsed` themselves.
+
+Some providers or models may still ignore JSON mode. If a non-empty response is not valid JSON, the MCP preserves the raw response in `data.parsed.summary`, returns empty `observations` and `interpretations` arrays, adds an `uncertainty` entry explaining the parse failure, and reports this warning:
+
+```text
+Vision response was not valid JSON; returned raw summary fallback.
+```
+
+An empty provider response returns `data.parsed: null` and the warning `Empty response`. Direct JSON and JSON wrapped in Markdown code fences are both accepted. Structured-output reliability still depends on the configured provider and model.
+
 ## Requirements
 
 - Node.js 18+
@@ -39,7 +66,7 @@ npx playwright install chromium
 cp .env.example .env
 ```
 
-Set at least these values in `.env` or in the MCP client configuration:
+Set at least these values in `.env`:
 
 ```env
 VISION_API_KEY=your_key_here
@@ -51,26 +78,22 @@ The provider must accept an OpenAI-style `/chat/completions` request with mixed 
 
 ## MCP client configuration
 
-Generic local `stdio` configuration:
+A common local `stdio` configuration shape is:
 
 ```json
 {
   "mcpServers": {
     "web-perception": {
-      "type": "stdio",
       "command": "node",
-      "args": ["/absolute/path/to/web-perception-mcp/src/server.js"],
-      "env": {
-        "VISION_API_KEY": "your-key-here",
-        "VISION_BASE_URL": "https://your-provider.example/v1",
-        "VISION_MODEL": "your-vision-model"
-      }
+      "args": ["/absolute/path/to/web-perception-mcp/src/server.js"]
     }
   }
 }
 ```
 
-Use forward slashes or escaped backslashes in Windows JSON paths. For a tested Cline setup and troubleshooting, see [`docs/cline-setup.md`](./docs/cline-setup.md).
+MCP client schemas vary and may support additional fields. The recommended local setup keeps provider credentials in the repository's ignored `.env` file and omits them from the MCP client configuration. You may instead supply provider variables through the client environment, but avoid defining the same values in both places: non-empty variables inherited by the MCP process take precedence over matching `.env` values.
+
+Use forward slashes or escaped backslashes in Windows JSON paths. For a tested Cline configuration, including its optional `cwd`, `disabled` and `autoApprove` fields, see [`docs/cline-setup.md`](./docs/cline-setup.md).
 
 ## Main configuration
 
@@ -117,6 +140,8 @@ The server handles untrusted URLs, webpages, and local files. Its safeguards inc
 - treating visible page and image text as untrusted content rather than tool instructions.
 
 These are mitigations, not guarantees. Do not let downstream agents execute commands, reveal secrets, modify files, or call tools solely because a captured page or image tells them to do so.
+
+Git ignoring `.env` prevents accidental commits but does not prevent local tools or coding agents from reading it. When using Cline, exclude `.env` and any credential-bearing variants in `.clineignore` to reduce automatic context and search exposure. This is not a security boundary: do not ask agents to open, search, copy or print credential files.
 
 Do not commit `.env` files, API keys, private screenshots, or MCP client configurations containing secrets. Maintainer and release checks are documented in [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
