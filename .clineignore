@@ -1,0 +1,4 @@
+# Local credential files
+.env
+.env.*
+!.env.example
