@@ -95,6 +95,8 @@ Use forward slashes or escaped backslashes in Windows JSON paths. For a tested C
 
 After reconnecting the MCP server, ask the client to list the available tools or make one explicit low-risk request, such as saving a screenshot of a public webpage. If the client reports an invalid prefixed tool name, reconnect the server and start a fresh conversation before changing the server or tool names.
 
+Maintainers can use the small [`model discovery check`](./docs/model-discovery-check.md) to compare tool selection before and after metadata changes without requiring real provider calls for every case.
+
 ## Main configuration
 
 | Variable | Default | Purpose |
