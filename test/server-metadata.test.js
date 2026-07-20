@@ -37,7 +37,10 @@ function startMcpServer(t) {
 			try {
 				message = JSON.parse(line);
 			} catch (error) {
-				for (const { reject } of pending.values()) reject(error);
+				for (const { reject, timeout } of pending.values()) {
+					clearTimeout(timeout);
+					reject(error);
+				}
 				pending.clear();
 				continue;
 			}
