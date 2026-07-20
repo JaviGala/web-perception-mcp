@@ -82,7 +82,7 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.deepEqual(capturePage.inputSchema.required, ["url"]);
 
 	const analyzePage = findTool(tools, "analyze_page_screenshot");
-	assert.match(analyzePage.description, /rendered appearance/i);
+	assert.match(analyzePage.description, /visual appearance/i);
 	assert.match(analyzePage.description, /layout|visual hierarchy/i);
 	assert.match(analyzePage.description, /primarily textual retrieval/i);
 	assert.deepEqual(analyzePage.inputSchema.required, ["url", "prompt"]);
