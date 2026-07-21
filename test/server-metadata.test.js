@@ -91,6 +91,14 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(analyzePage.description, /layout|visual hierarchy/i);
 	assert.match(analyzePage.description, /primarily textual retrieval/i);
 	assert.deepEqual(analyzePage.inputSchema.required, ["url", "prompt"]);
+	assert.match(
+		analyzePage.inputSchema.properties.screenshot_mode.description,
+		/sections for long or scrollable pages/i,
+	);
+	assert.match(
+		analyzePage.inputSchema.properties.screenshot_mode.description,
+		/full_page only when one complete-page image is specifically required/i,
+	);
 
 	for (const tool of tools) {
 		assert.equal(tool.inputSchema.type, "object");

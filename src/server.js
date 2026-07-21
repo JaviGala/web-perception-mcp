@@ -62,7 +62,7 @@ function screenshotModeSchema(defaultMode = "viewport") {
 		enum: ["viewport", "full_page", "element", "sections"],
 		default: defaultMode,
 		description:
-			"Choose viewport for the visible area, full_page for the complete page, element for one CSS selector, or sections for ordered viewport-sized screenshots.",
+			"Choose viewport for the currently visible area. Use sections for long or scrollable pages, especially when visual hierarchy, sticky elements, or content across multiple scroll positions matters. Use full_page only when one complete-page image is specifically required and the page is reasonably short. Use element for one CSS selector.",
 	};
 }
 
