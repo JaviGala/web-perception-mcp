@@ -80,6 +80,11 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(capturePage.description, /use analyze_page_screenshot instead/i);
 	assert.match(capturePage.description, /textual fetch or scraping/i);
 	assert.deepEqual(capturePage.inputSchema.required, ["url"]);
+	assert.equal(capturePage.inputSchema.properties.include_open_command.default, false);
+	assert.match(
+		capturePage.inputSchema.properties.include_open_command.description,
+		/only when the user explicitly asks/i,
+	);
 
 	const analyzePage = findTool(tools, "analyze_page_screenshot");
 	assert.match(analyzePage.description, /visual appearance/i);

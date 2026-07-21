@@ -82,7 +82,7 @@ function pageCaptureProperties(defaultScreenshotMode = "viewport", maxSectionsMa
 		include_open_command: {
 			type: "boolean",
 			default: false,
-			description: "Return a best-effort OS-specific command for manually opening the screenshot. The MCP never executes it.",
+			description: "Return a best-effort OS-specific command for manually opening or previewing the screenshot only when the user explicitly asks for it. The MCP never executes it.",
 		},
 		wait_until: {
 			type: "string",
