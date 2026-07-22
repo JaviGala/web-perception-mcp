@@ -8,6 +8,220 @@ permissions:
   contents: read
 
 jobs:
+  add-risk-metadata:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Add risk annotations and guidance
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path_string, old, new):
+              path = Path(path_string)
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected one match in {path}, found {count}: {old[:80]!r}")
+              path.write_text(text.replace(old, new))
+              print(f"Updated: {path}")
+
+          replace_once(
+              "src/server.js",
+              '''\t"Use full_page only when one complete-page image is specifically required and the page is reasonably short; use element only for one CSS selector.",
+          \t"Do not use these tools for primarily textual webpage retrieval when an ordinary fetch, search, or scraping tool is sufficient.",''',
+              '''\t"Use full_page only when one complete-page image is specifically required and the page is reasonably short; use element only for one CSS selector.",
+          \t"The tools do not edit target webpages or source images. Webpage tools make network requests and launch a local browser; screenshot capture writes local files; analysis tools send image content and prompts to the configured provider and may consume provider quota.",
+          \t"Do not use these tools for primarily textual webpage retrieval when an ordinary fetch, search, or scraping tool is sufficient.",''',
+          )
+
+          replace_once(
+              "src/server.js",
+              '''\t\tdescription: `Analyze one or more existing local image files with the configured vision model. Use for screenshots, mockups, diagrams, charts, or photographs already available on disk. Do not use for URLs or webpage capture. Returns visual analysis from the configured provider. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
+          \t\tinputSchema:''',
+              '''\t\tdescription: `Analyze one or more existing local image files with the configured vision model. Reads the selected files without modifying them and sends the images and prompt to the configured vision provider, which may expose their content to that provider and consume quota. Use for screenshots, mockups, diagrams, charts, or photographs already available on disk. Do not use for URLs or webpage capture. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
+          \t\tannotations: {
+          \t\t\treadOnlyHint: true,
+          \t\t\tdestructiveHint: false,
+          \t\t\tidempotentHint: false,
+          \t\t\topenWorldHint: true,
+          \t\t},
+          \t\tinputSchema:''',
+          )
+
+          replace_once(
+              "src/server.js",
+              '''\t\tdescription: `Render a public webpage in a browser and save screenshot image file(s) without calling the vision provider. Use when the screenshot files themselves are needed. Do not use when the user wants visual interpretation; use analyze_page_screenshot instead. Do not use as a substitute for ordinary textual fetch or scraping. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
+          \t\tinputSchema:''',
+              '''\t\tdescription: `Render a public webpage in a local headless browser and save screenshot image file(s). Makes a network request and writes new local files, but does not call the vision provider or modify the target webpage. Use when the screenshot files themselves are needed. Do not use when the user wants visual interpretation; use analyze_page_screenshot instead. Do not use as a substitute for ordinary textual fetch or scraping. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
+          \t\tannotations: {
+          \t\t\treadOnlyHint: false,
+          \t\t\tdestructiveHint: false,
+          \t\t\tidempotentHint: false,
+          \t\t\topenWorldHint: true,
+          \t\t},
+          \t\tinputSchema:''',
+          )
+
+          replace_once(
+              "src/server.js",
+              '''\t\tdescription: `Render a public webpage, capture screenshot(s), and analyze its visual appearance with the configured vision model. Use when the answer depends on layout, visual hierarchy, canvas content, charts, rendered state, or other information not reliably available from text or HTML alone. Do not use for primarily textual retrieval when fetch, search, or scraping is sufficient. Returns visual analysis plus capture metadata. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
+          \t\tinputSchema:''',
+              '''\t\tdescription: `Render a public webpage, capture screenshot(s), and analyze its visual appearance with the configured vision model. Makes a network request, launches a local headless browser, writes screenshot files locally, and sends the screenshots, prompt, and included page context to the configured vision provider; this may expose content and consume quota. Sections mode may send multiple images and increase latency and provider usage. Use when the answer depends on layout, visual hierarchy, canvas content, charts, rendered state, or other information not reliably available from text or HTML alone. Do not use for primarily textual retrieval when fetch, search, or scraping is sufficient. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
+          \t\tannotations: {
+          \t\t\treadOnlyHint: false,
+          \t\t\tdestructiveHint: false,
+          \t\t\tidempotentHint: false,
+          \t\t\topenWorldHint: true,
+          \t\t},
+          \t\tinputSchema:''',
+          )
+
+          replace_once(
+              "test/server-metadata.test.js",
+              '''\t\t"complete-page image",
+          \t]) {''',
+              '''\t\t"complete-page image",
+          \t\t"network requests",
+          \t\t"writes local files",
+          \t\t"provider quota",
+          \t]) {''',
+          )
+
+          replace_once(
+              "test/server-metadata.test.js",
+              '''\tassert.match(analyzeImage.description, /do not use for urls/i);
+          \tassert.deepEqual(analyzeImage.inputSchema.required, ["image_path", "prompt"]);''',
+              '''\tassert.match(analyzeImage.description, /do not use for urls/i);
+          \tassert.match(analyzeImage.description, /without modifying them/i);
+          \tassert.match(analyzeImage.description, /consume quota/i);
+          \tassert.deepEqual(analyzeImage.annotations, {
+          \t\treadOnlyHint: true,
+          \t\tdestructiveHint: false,
+          \t\tidempotentHint: false,
+          \t\topenWorldHint: true,
+          \t});
+          \tassert.deepEqual(analyzeImage.inputSchema.required, ["image_path", "prompt"]);''',
+          )
+
+          replace_once(
+              "test/server-metadata.test.js",
+              '''\tassert.match(capturePage.description, /textual fetch or scraping/i);
+          \tassert.deepEqual(capturePage.inputSchema.required, ["url"]);''',
+              '''\tassert.match(capturePage.description, /textual fetch or scraping/i);
+          \tassert.match(capturePage.description, /network request/i);
+          \tassert.match(capturePage.description, /writes new local files/i);
+          \tassert.match(capturePage.description, /does not call the vision provider/i);
+          \tassert.match(capturePage.description, /does not .*modify the target webpage/i);
+          \tassert.deepEqual(capturePage.annotations, {
+          \t\treadOnlyHint: false,
+          \t\tdestructiveHint: false,
+          \t\tidempotentHint: false,
+          \t\topenWorldHint: true,
+          \t});
+          \tassert.deepEqual(capturePage.inputSchema.required, ["url"]);''',
+          )
+
+          replace_once(
+              "test/server-metadata.test.js",
+              '''\tassert.match(analyzePage.description, /primarily textual retrieval/i);
+          \tassert.deepEqual(analyzePage.inputSchema.required, ["url", "prompt"]);''',
+              '''\tassert.match(analyzePage.description, /primarily textual retrieval/i);
+          \tassert.match(analyzePage.description, /writes screenshot files locally/i);
+          \tassert.match(analyzePage.description, /included page context/i);
+          \tassert.match(analyzePage.description, /consume quota/i);
+          \tassert.match(analyzePage.description, /multiple images/i);
+          \tassert.deepEqual(analyzePage.annotations, {
+          \t\treadOnlyHint: false,
+          \t\tdestructiveHint: false,
+          \t\tidempotentHint: false,
+          \t\topenWorldHint: true,
+          \t});
+          \tassert.deepEqual(analyzePage.inputSchema.required, ["url", "prompt"]);''',
+          )
+
+          replace_once(
+              "README.md",
+              '''- `element` captures one CSS selector when the task concerns a specific visible component.
+
+          ## Requirements''',
+              '''- `element` captures one CSS selector when the task concerns a specific visible component.
+
+          ### Operational effects and MCP risk hints
+
+          The tools publish the standard MCP `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` annotations. These are behavioural hints for clients and models, not security guarantees.
+
+          | Tool | Read only? | Destructive? | Idempotent? | Open world? | Main operational effects |
+          | --- | --- | --- | --- | --- | --- |
+          | `analyze_image` | Yes | No | No | Yes | Reads local images and sends images and prompts to the configured provider; repeated calls may consume quota and produce different responses. |
+          | `capture_page_screenshot` | No | No | No | Yes | Makes a network request, launches Chromium, and creates new local screenshot files without calling the vision provider. |
+          | `analyze_page_screenshot` | No | No | No | Yes | Makes a network request, launches Chromium, creates local screenshots, and sends screenshots, prompts, and optional page context to the configured provider. |
+
+          Here, “read only” means that the tool does not modify its environment. It does not mean that a call has no privacy, cost, network, CPU, memory, or disk effects. The two screenshot tools are marked non-read-only because they create local files; they are non-destructive because they do not intentionally overwrite or delete existing data. All three are non-idempotent because retries can create additional files, consume provider quota, or produce different model output.
+
+          ## Requirements''',
+          )
+
+          replace_once(
+              "docs/cline-setup.md",
+              '''- Cline does not choose `sections` merely as a precaution.
+          - The screenshot is sent to the configured vision provider after approval.''',
+              '''- Cline does not choose `sections` merely as a precaution.
+          - The screenshot is sent to the configured vision provider after approval.
+          - If Cline presents a risk summary, it distinguishes no repository or target-page modification from the actual operational effects: a network request, local browser launch, local screenshot creation, provider data transfer, and possible quota use. It should not report `Risks: None`.''',
+          )
+
+          replace_once(
+              "docs/cline-setup.md",
+              '''Describe the overall layout and how the article structure changes down the page.
+          Do not open or preview the screenshots.''',
+              '''Describe the overall layout and how the article structure changes down the page.''',
+          )
+
+          replace_once(
+              "docs/model-discovery-check.md",
+              '''A result is satisfactory when the model selects the expected tool on the first attempt, supplies the required arguments, and avoids the visual tools for the textual negative control.''',
+              '''For tool-using cases, also record whether the model distinguishes mutation risk from operational effects. Webpage analysis should not be described as having “no risk”: it makes a network request, launches a local browser, creates screenshot files, sends content to the configured provider, and may consume quota. A satisfactory assessment can still describe the task as low risk to the repository and target page.
+
+          A result is satisfactory when the model selects the expected tool on the first attempt, supplies the required arguments, avoids the visual tools for the textual negative control, and does not erase relevant operational effects behind an absolute `Risks: None` statement.''',
+          )
+          PY
+
+      - name: Check server syntax
+        run: node --check src/server.js
+
+      - name: Check diff formatting
+        run: git diff --check
+
+      - name: Run metadata contract test
+        run: node --test test/server-metadata.test.js
+
+      - name: Commit risk metadata
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/server.js test/server-metadata.test.js README.md docs/cline-setup.md docs/model-discovery-check.md
+          git commit -m "Describe MCP tool operational risks"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
   test:
     runs-on: ubuntu-latest
     steps:
