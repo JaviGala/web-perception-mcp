@@ -70,7 +70,7 @@ jobs:
               "src/server.js",
               '''\t\tdescription: `Render a public webpage in a browser and save screenshot image file(s) without calling the vision provider. Use when the screenshot files themselves are needed. Do not use when the user wants visual interpretation; use analyze_page_screenshot instead. Do not use as a substitute for ordinary textual fetch or scraping. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
           \t\tinputSchema:''',
-              '''\t\tdescription: `Render a public webpage in a local headless browser and save screenshot image file(s). Makes a network request and writes new local files, but does not call the vision provider or modify the target webpage. Use when the screenshot files themselves are needed. Do not use when the user wants visual interpretation; use analyze_page_screenshot instead. Do not use as a substitute for ordinary textual fetch or scraping. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
+              '''\t\tdescription: `Render a public webpage in a local headless browser and save screenshot image file(s). Makes a network request and writes new local files without calling the vision provider or modifying the target webpage. Use when the screenshot files themselves are needed. Do not use when the user wants visual interpretation; use analyze_page_screenshot instead. Do not use as a substitute for ordinary textual fetch or scraping. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
           \t\tannotations: {
           \t\t\treadOnlyHint: false,
           \t\t\tdestructiveHint: false,
@@ -128,8 +128,8 @@ jobs:
               '''\tassert.match(capturePage.description, /textual fetch or scraping/i);
           \tassert.match(capturePage.description, /network request/i);
           \tassert.match(capturePage.description, /writes new local files/i);
-          \tassert.match(capturePage.description, /does not call the vision provider/i);
-          \tassert.match(capturePage.description, /does not .*modify the target webpage/i);
+          \tassert.match(capturePage.description, /without calling the vision provider/i);
+          \tassert.match(capturePage.description, /without .*modifying the target webpage/i);
           \tassert.deepEqual(capturePage.annotations, {
           \t\treadOnlyHint: false,
           \t\tdestructiveHint: false,
