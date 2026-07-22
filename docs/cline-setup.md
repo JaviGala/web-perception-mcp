@@ -130,11 +130,30 @@ Expected result:
 
 - Cline selects `analyze_page_screenshot` from its tool metadata.
 - The proposed arguments include the URL and a relevant visual-analysis prompt.
+- For this short page, `screenshot_mode` is `viewport`.
+- Cline does not choose `sections` merely as a precaution.
 - The screenshot is sent to the configured vision provider after approval.
 
 Tool names may be prefixed by the configured server identifier in the Cline interface. The model should use the exact exposed name rather than reconstructing it.
 
-## Check 3: textual negative control
+## Check 3: long-page mode selection
+
+Start a fresh conversation and ask:
+
+```text
+Inspect https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide as rendered.
+Describe the overall layout and how the article structure changes down the page.
+Do not open or preview the screenshots.
+```
+
+Expected result:
+
+- Cline selects `analyze_page_screenshot`.
+- `screenshot_mode` is `sections`, because the task explicitly requires visual coverage across a long page.
+- Cline does not select `full_page` for the long document.
+- The tool produces ordered section screenshots and sends them to the configured vision provider after approval.
+
+## Check 4: textual negative control
 
 Start another fresh conversation and ask:
 
@@ -146,7 +165,7 @@ When an ordinary fetch tool is available, Cline should not select a web-percepti
 
 The wider release check, including local-image and canvas cases, is documented in [`model-discovery-check.md`](./model-discovery-check.md).
 
-## Check 4: analyse a local image
+## Check 5: analyse a local image
 
 Use a local image path inside an allowed directory. By default, the server accepts images from the project directory, the app temporary directory, the screenshot output directory, and the operating-system temporary directory.
 
