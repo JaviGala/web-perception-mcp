@@ -7,7 +7,7 @@ The MCP gives a non-visual coding agent access to local image analysis, rendered
 ## Before installing
 
 > [!IMPORTANT]
-> Webpage capture requires a separate Chromium browser managed by Playwright. The browser download is distinct from `npm install` and normally adds several hundred megabytes; the exact size varies by Playwright version and operating system.
+> Webpage capture requires Chromium Headless Shell managed by Playwright. The browser download is distinct from `npm install`. Using `--only-shell` avoids downloading the separate full Chromium build; the exact size varies by Playwright version and operating system.
 
 `analyze_image` does not launch Chromium. The two analysis tools send images, prompts, and any included compact page context to the configured vision provider. `capture_page_screenshot` renders pages locally and does not call that provider.
 
@@ -16,7 +16,7 @@ The MCP gives a non-visual coding agent access to local image analysis, rendered
 - Node.js 18 or newer.
 - Cline installed in VS Code or another supported IDE.
 - An API key for a compatible vision provider.
-- Playwright Chromium for webpage screenshots.
+- Playwright Chromium Headless Shell for webpage screenshots.
 - A local clone of this repository.
 
 ## Install the server locally
@@ -25,7 +25,7 @@ The MCP gives a non-visual coding agent access to local image analysis, rendered
 git clone https://github.com/JaviGala/web-perception-mcp.git
 cd web-perception-mcp
 npm install
-npx playwright install chromium
+npx playwright install --only-shell chromium
 cp .env.example .env
 npm test
 ```
@@ -216,7 +216,7 @@ If non-empty provider variables are also present in the Cline `env` block or inh
 Run:
 
 ```bash
-npx playwright install chromium
+npx playwright install --only-shell chromium
 npm test
 ```
 

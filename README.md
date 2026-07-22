@@ -23,7 +23,7 @@ Do not use it for ordinary web search, primarily textual webpage retrieval, gene
 ## What it installs and what leaves your machine
 
 > [!IMPORTANT]
-> The two webpage tools require a separate Chromium browser managed by Playwright. The browser download is distinct from `npm install` and normally adds several hundred megabytes; the exact size varies by Playwright version and operating system.
+> The two webpage tools require Chromium Headless Shell managed by Playwright. The browser download is distinct from `npm install`. Using `--only-shell` avoids downloading the separate full Chromium build; the exact size varies by Playwright version and operating system.
 
 - `analyze_image` reads local images and does not launch Chromium.
 - `capture_page_screenshot` and `analyze_page_screenshot` launch Chromium locally to render webpages.
@@ -48,7 +48,7 @@ The server also supplies concise MCP instructions and tool descriptions so compa
 - Node.js 18+
 - An MCP client that can run local `stdio` servers
 - An API key for a vision provider with an OpenAI-style `/chat/completions` endpoint
-- Playwright Chromium for webpage capture or analysis
+- Playwright Chromium Headless Shell for webpage capture or analysis
 
 ## Install
 
@@ -56,11 +56,11 @@ The server also supplies concise MCP instructions and tool descriptions so compa
 git clone https://github.com/JaviGala/web-perception-mcp.git
 cd web-perception-mcp
 npm install
-npx playwright install chromium
+npx playwright install --only-shell chromium
 cp .env.example .env
 ```
 
-The Playwright command downloads the separate Chromium runtime described above. Users who only intend to inspect local images still need the JavaScript dependencies, but `analyze_image` does not launch the browser.
+The Playwright command downloads the headless browser runtime without the separate full Chromium build. Users who only intend to inspect local images still need the JavaScript dependencies, but `analyze_image` does not launch the browser.
 
 Set at least these values in `.env`:
 

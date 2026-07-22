@@ -8,7 +8,7 @@ Changes should strengthen that core without turning the repository into a genera
 
 ```bash
 npm install
-npx playwright install chromium
+npx playwright install --only-shell chromium
 npm test
 ```
 
