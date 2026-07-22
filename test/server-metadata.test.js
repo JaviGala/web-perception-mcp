@@ -64,6 +64,9 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 		"viewport by default",
 		"multiple scroll positions",
 		"complete-page image",
+		"network requests",
+		"writes local files",
+		"provider quota",
 	]) {
 		assert.ok(instructions.includes(expected), `Instructions should mention ${expected}`);
 	}
@@ -77,6 +80,14 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	const analyzeImage = findTool(tools, "analyze_image");
 	assert.match(analyzeImage.description, /existing local image/i);
 	assert.match(analyzeImage.description, /do not use for urls/i);
+	assert.match(analyzeImage.description, /without modifying them/i);
+	assert.match(analyzeImage.description, /consume quota/i);
+	assert.deepEqual(analyzeImage.annotations, {
+		readOnlyHint: true,
+		destructiveHint: false,
+		idempotentHint: false,
+		openWorldHint: true,
+	});
 	assert.deepEqual(analyzeImage.inputSchema.required, ["image_path", "prompt"]);
 	assert.match(analyzeImage.inputSchema.properties.image_path.description, /allowed_image_dirs/i);
 
@@ -84,6 +95,16 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(capturePage.description, /without calling the vision provider/i);
 	assert.match(capturePage.description, /use analyze_page_screenshot instead/i);
 	assert.match(capturePage.description, /textual fetch or scraping/i);
+	assert.match(capturePage.description, /network request/i);
+	assert.match(capturePage.description, /writes new local files/i);
+	assert.match(capturePage.description, /without calling the vision provider/i);
+	assert.match(capturePage.description, /without .*modifying the target webpage/i);
+	assert.deepEqual(capturePage.annotations, {
+		readOnlyHint: false,
+		destructiveHint: false,
+		idempotentHint: false,
+		openWorldHint: true,
+	});
 	assert.deepEqual(capturePage.inputSchema.required, ["url"]);
 	assert.equal(capturePage.inputSchema.properties.screenshot_mode.default, "viewport");
 	assert.equal(capturePage.inputSchema.properties.include_open_command.default, false);
@@ -96,6 +117,16 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(analyzePage.description, /visual appearance/i);
 	assert.match(analyzePage.description, /layout|visual hierarchy/i);
 	assert.match(analyzePage.description, /primarily textual retrieval/i);
+	assert.match(analyzePage.description, /writes screenshot files locally/i);
+	assert.match(analyzePage.description, /included page context/i);
+	assert.match(analyzePage.description, /consume quota/i);
+	assert.match(analyzePage.description, /multiple images/i);
+	assert.deepEqual(analyzePage.annotations, {
+		readOnlyHint: false,
+		destructiveHint: false,
+		idempotentHint: false,
+		openWorldHint: true,
+	});
 	assert.deepEqual(analyzePage.inputSchema.required, ["url", "prompt"]);
 	assert.equal(analyzePage.inputSchema.properties.screenshot_mode.default, "viewport");
 	assert.match(

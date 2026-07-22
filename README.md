@@ -50,6 +50,18 @@ The server also supplies concise MCP instructions and tool descriptions so compa
 - `full_page` creates one complete-page image. Reserve it for specifically requested, reasonably short pages; very tall images can reduce visual legibility.
 - `element` captures one CSS selector when the task concerns a specific visible component.
 
+### Operational effects and MCP risk hints
+
+The tools publish the standard MCP `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` annotations. These are behavioural hints for clients and models, not security guarantees.
+
+| Tool | Read only? | Destructive? | Idempotent? | Open world? | Main operational effects |
+| --- | --- | --- | --- | --- | --- |
+| `analyze_image` | Yes | No | No | Yes | Reads local images and sends images and prompts to the configured provider; repeated calls may consume quota and produce different responses. |
+| `capture_page_screenshot` | No | No | No | Yes | Makes a network request, launches Chromium, and creates new local screenshot files without calling the vision provider. |
+| `analyze_page_screenshot` | No | No | No | Yes | Makes a network request, launches Chromium, creates local screenshots, and sends screenshots, prompts, and optional page context to the configured provider. |
+
+Here, “read only” means that the tool does not modify its environment. It does not mean that a call has no privacy, cost, network, CPU, memory, or disk effects. The two screenshot tools are marked non-read-only because they create local files; they are non-destructive because they do not intentionally overwrite or delete existing data. All three are non-idempotent because retries can create additional files, consume provider quota, or produce different model output.
+
 ## Requirements
 
 - Node.js 18+

@@ -44,6 +44,8 @@ For each case, record:
 - whether the selection matched the expected decision;
 - any extra instruction needed from the user.
 
-A result is satisfactory when the model selects the expected tool on the first attempt, supplies the required arguments, and avoids the visual tools for the textual negative control.
+For tool-using cases, also record whether the model distinguishes mutation risk from operational effects. Webpage analysis should not be described as having “no risk”: it makes a network request, launches a local browser, creates screenshot files, sends content to the configured provider, and may consume quota. A satisfactory assessment can still describe the task as low risk to the repository and target page.
+
+A result is satisfactory when the model selects the expected tool on the first attempt, supplies the required arguments, avoids the visual tools for the textual negative control, and does not erase relevant operational effects behind an absolute `Risks: None` statement.
 
 A single intermittent failure should be repeated once in a fresh conversation. Persistent invalid prefixed names should be investigated as a client/model compatibility issue before changing the server's public name or adding aliases.

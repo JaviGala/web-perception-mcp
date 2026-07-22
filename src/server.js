@@ -45,6 +45,7 @@ const SERVER_INSTRUCTIONS = [
 	"Use viewport by default for short pages, the initial visible state, or when the task does not require content below the first viewport.",
 	"Use sections only when the task requires ordered coverage across a long page or multiple scroll positions; do not choose it merely as a precaution because it can create and analyze multiple images.",
 	"Use full_page only when one complete-page image is specifically required and the page is reasonably short; use element only for one CSS selector.",
+	"The tools do not edit target webpages or source images. Webpage tools make network requests and launch a local browser; screenshot capture writes local files; analysis tools send image content and prompts to the configured provider and may consume provider quota.",
 	"Do not use these tools for primarily textual webpage retrieval when an ordinary fetch, search, or scraping tool is sufficient.",
 ].join(" ");
 
@@ -123,7 +124,13 @@ const UNTRUSTED_VISUAL_CONTENT_NOTE =
 const TOOLS = [
 	{
 		name: "analyze_image",
-		description: `Analyze one or more existing local image files with the configured vision model. Use for screenshots, mockups, diagrams, charts, or photographs already available on disk. Do not use for URLs or webpage capture. Returns visual analysis from the configured provider. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
+		description: `Analyze one or more existing local image files with the configured vision model. Reads the selected files without modifying them and sends the images and prompt to the configured vision provider, which may expose their content to that provider and consume quota. Use for screenshots, mockups, diagrams, charts, or photographs already available on disk. Do not use for URLs or webpage capture. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
+		annotations: {
+			readOnlyHint: true,
+			destructiveHint: false,
+			idempotentHint: false,
+			openWorldHint: true,
+		},
 		inputSchema: {
 			type: "object",
 			properties: {
@@ -152,7 +159,13 @@ const TOOLS = [
 	},
 	{
 		name: "capture_page_screenshot",
-		description: `Render a public webpage in a browser and save screenshot image file(s) without calling the vision provider. Use when the screenshot files themselves are needed. Do not use when the user wants visual interpretation; use analyze_page_screenshot instead. Do not use as a substitute for ordinary textual fetch or scraping. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
+		description: `Render a public webpage in a local headless browser and save screenshot image file(s). Makes a network request and writes new local files without calling the vision provider or modifying the target webpage. Use when the screenshot files themselves are needed. Do not use when the user wants visual interpretation; use analyze_page_screenshot instead. Do not use as a substitute for ordinary textual fetch or scraping. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
+		annotations: {
+			readOnlyHint: false,
+			destructiveHint: false,
+			idempotentHint: false,
+			openWorldHint: true,
+		},
 		inputSchema: {
 			type: "object",
 			properties: {
@@ -164,7 +177,13 @@ const TOOLS = [
 	},
 	{
 		name: "analyze_page_screenshot",
-		description: `Render a public webpage, capture screenshot(s), and analyze its visual appearance with the configured vision model. Use when the answer depends on layout, visual hierarchy, canvas content, charts, rendered state, or other information not reliably available from text or HTML alone. Do not use for primarily textual retrieval when fetch, search, or scraping is sufficient. Returns visual analysis plus capture metadata. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
+		description: `Render a public webpage, capture screenshot(s), and analyze its visual appearance with the configured vision model. Makes a network request, launches a local headless browser, writes screenshot files locally, and sends the screenshots, prompt, and included page context to the configured vision provider; this may expose content and consume quota. Sections mode may send multiple images and increase latency and provider usage. Use when the answer depends on layout, visual hierarchy, canvas content, charts, rendered state, or other information not reliably available from text or HTML alone. Do not use for primarily textual retrieval when fetch, search, or scraping is sufficient. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
+		annotations: {
+			readOnlyHint: false,
+			destructiveHint: false,
+			idempotentHint: false,
+			openWorldHint: true,
+		},
 		inputSchema: {
 			type: "object",
 			properties: {

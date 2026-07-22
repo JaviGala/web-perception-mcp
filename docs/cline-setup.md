@@ -133,6 +133,7 @@ Expected result:
 - For this short page, `screenshot_mode` is `viewport`.
 - Cline does not choose `sections` merely as a precaution.
 - The screenshot is sent to the configured vision provider after approval.
+- If Cline presents a risk summary, it distinguishes no repository or target-page modification from the actual operational effects: a network request, local browser launch, local screenshot creation, provider data transfer, and possible quota use. It should not report `Risks: None`.
 
 Tool names may be prefixed by the configured server identifier in the Cline interface. The model should use the exact exposed name rather than reconstructing it.
 
@@ -143,7 +144,6 @@ Start a fresh conversation and ask:
 ```text
 Inspect https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide as rendered.
 Describe the overall layout and how the article structure changes down the page.
-Do not open or preview the screenshots.
 ```
 
 Expected result:
