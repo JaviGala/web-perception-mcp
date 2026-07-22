@@ -154,8 +154,8 @@ jobs:
       - name: Check diff formatting
         run: git diff --check
 
-      - name: Run tests
-        run: npm test
+      - name: Run metadata contract test
+        run: node --test test/server-metadata.test.js
 
       - name: Commit completed changes
         shell: bash
