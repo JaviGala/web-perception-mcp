@@ -392,7 +392,7 @@ async function handleAnalyzePageScreenshot(args = {}) {
 	safeLog("info", `analyze_page_screenshot: ${args.url}`);
 	try {
 		const result = await capturePage(args, {
-			defaultScreenshotMode: "sections",
+			defaultScreenshotMode: "viewport",
 			maxSectionsMaximum: 8,
 		});
 		if (!result.ok) return result.response;

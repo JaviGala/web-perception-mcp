@@ -98,6 +98,10 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(analyzePage.description, /primarily textual retrieval/i);
 	assert.deepEqual(analyzePage.inputSchema.required, ["url", "prompt"]);
 	assert.equal(analyzePage.inputSchema.properties.screenshot_mode.default, "viewport");
+	assert.match(
+		readFileSync(serverPath, "utf8"),
+		/async function handleAnalyzePageScreenshot[\s\S]*?defaultScreenshotMode:\s*"viewport"/,
+	);
 	assert.match(analyzePage.inputSchema.properties.screenshot_mode.description, /viewport by default/i);
 	assert.match(analyzePage.inputSchema.properties.screenshot_mode.description, /do not use sections merely/i);
 	assert.match(analyzePage.inputSchema.properties.screenshot_mode.description, /multiple images/i);
