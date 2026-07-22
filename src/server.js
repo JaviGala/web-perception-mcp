@@ -443,7 +443,7 @@ async function handleAnalyzePageScreenshot(args = {}) {
 const server = new Server(
 	{
 		name: "web-perception-mcp",
-		version: "0.1.3",
+		version: "0.2.0",
 	},
 	{
 		capabilities: { tools: {} },

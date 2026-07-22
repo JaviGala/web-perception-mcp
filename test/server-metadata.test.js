@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -8,6 +9,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 const testDir = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(testDir, "..");
 const serverPath = resolve(rootDir, "src", "server.js");
+const packageJson = JSON.parse(readFileSync(resolve(rootDir, "package.json"), "utf8"));
 
 function findTool(tools, name) {
 	const tool = tools.find((candidate) => candidate.name === name);
@@ -44,7 +46,7 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 
 	const serverVersion = client.getServerVersion();
 	assert.equal(serverVersion?.name, "web-perception-mcp");
-	assert.equal(serverVersion?.version, "0.1.3");
+	assert.equal(serverVersion?.version, packageJson.version);
 	assert.ok(client.getServerCapabilities()?.tools);
 
 	const serverInstructions = client.getInstructions();
