@@ -1,0 +1,166 @@
+name: Finish screenshot mode guidance
+
+on:
+  push:
+    branches:
+      - agent/improve-tool-discovery
+    paths:
+      - ".github/workflows/finish-screenshot-mode.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  finish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/improve-tool-discovery
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Complete screenshot mode guidance
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once_or_accept(path_string, old, new):
+              path = Path(path_string)
+              text = path.read_text()
+              if new in text:
+                  print(f"Already correct: {path}")
+                  return
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected one replaceable block in {path}, found {count}")
+              path.write_text(text.replace(old, new))
+              print(f"Updated: {path}")
+
+          replace_once_or_accept(
+              "src/server.js",
+              'defaultScreenshotMode: "sections",',
+              'defaultScreenshotMode: "viewport",',
+          )
+
+          replace_once_or_accept(
+              "docs/model-discovery-check.md",
+              '| Canvas or rendered state | `Look at https://example.com/app and explain what is visible in the rendered canvas.` | Use `analyze_page_screenshot`. |',
+              '| Canvas or rendered state | `Look at https://example.com/app and explain what is visible in the rendered canvas.` | Use `analyze_page_screenshot`; use `viewport` unless the task explicitly requires content beyond the initial visible state. |',
+          )
+
+          replace_once_or_accept(
+              "docs/cline-setup.md",
+              '''- Cline selects `analyze_page_screenshot` from its tool metadata.
+          - The proposed arguments include the URL and a relevant visual-analysis prompt.
+          - The screenshot is sent to the configured vision provider after approval.''',
+              '''- Cline selects `analyze_page_screenshot` from its tool metadata.
+          - The proposed arguments include the URL and a relevant visual-analysis prompt.
+          - For this short page, `screenshot_mode` is `viewport`.
+          - Cline does not choose `sections` merely as a precaution.
+          - The screenshot is sent to the configured vision provider after approval.''',
+          )
+
+          replace_once_or_accept(
+              "docs/cline-setup.md",
+              '''Tool names may be prefixed by the configured server identifier in the Cline interface. The model should use the exact exposed name rather than reconstructing it.
+
+          ## Check 3: textual negative control''',
+              '''Tool names may be prefixed by the configured server identifier in the Cline interface. The model should use the exact exposed name rather than reconstructing it.
+
+          ## Check 3: long-page mode selection
+
+          Start a fresh conversation and ask:
+
+          ```text
+          Inspect https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide as rendered.
+          Describe the overall layout and how the article structure changes down the page.
+          Do not open or preview the screenshots.
+          ```
+
+          Expected result:
+
+          - Cline selects `analyze_page_screenshot`.
+          - `screenshot_mode` is `sections`, because the task explicitly requires visual coverage across a long page.
+          - Cline does not select `full_page` for the long document.
+          - The tool produces ordered section screenshots and sends them to the configured vision provider after approval.
+
+          ## Check 4: textual negative control''',
+          )
+
+          replace_once_or_accept(
+              "docs/cline-setup.md",
+              "## Check 4: analyse a local image",
+              "## Check 5: analyse a local image",
+          )
+
+          required = {
+              "src/server.js": [
+                  '...pageCaptureProperties("viewport", 8)',
+                  'defaultScreenshotMode: "viewport",',
+                  "Use viewport by default",
+                  "Do not use sections merely 'to be safe'",
+              ],
+              "test/server-metadata.test.js": [
+                  'screenshot_mode.default, "viewport"',
+                  "/viewport by default/i",
+                  "/do not use sections merely/i",
+                  "/multiple images/i",
+                  "/sections only when the task requires ordered coverage/i",
+              ],
+              "README.md": [
+                  "### Choosing a screenshot mode",
+                  "`viewport` is the default",
+                  "It is not a safer default",
+              ],
+              "docs/model-discovery-check.md": [
+                  "Short visual webpage",
+                  "Long visual webpage",
+                  'screenshot_mode: "sections"',
+                  "unless the task explicitly requires content beyond the initial visible state",
+              ],
+              "docs/cline-setup.md": [
+                  "For this short page, `screenshot_mode` is `viewport`",
+                  "## Check 3: long-page mode selection",
+                  "## Check 4: textual negative control",
+                  "## Check 5: analyse a local image",
+              ],
+          }
+
+          for path_string, fragments in required.items():
+              text = Path(path_string).read_text()
+              missing = [fragment for fragment in fragments if fragment not in text]
+              if missing:
+                  raise SystemExit(f"Missing expected content in {path_string}: {missing}")
+          PY
+
+      - name: Check server syntax
+        run: node --check src/server.js
+
+      - name: Check diff formatting
+        run: git diff --check
+
+      - name: Run tests
+        run: npm test
+
+      - name: Commit completed changes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/server.js docs/model-discovery-check.md docs/cline-setup.md
+          git commit -m "Complete screenshot mode guidance"
+          git push origin HEAD:agent/improve-tool-discovery
