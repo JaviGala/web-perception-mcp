@@ -48,8 +48,7 @@ jobs:
               count = server.count(old_runtime)
               if count != 1:
                   raise SystemExit(f"Expected one analyze-page runtime block, found {count}")
-              server = server.replace(old_runtime, new_runtime)
-              server_path.write_text(server)
+              server_path.write_text(server.replace(old_runtime, new_runtime))
               print("Updated runtime screenshot default")
           else:
               print("Runtime screenshot default already correct")
@@ -64,45 +63,10 @@ jobs:
           if regression not in test_text:
               if test_text.count(anchor) != 1:
                   raise SystemExit("Could not find unique analyze-page default assertion")
-              test_text = test_text.replace(anchor, anchor + "\n" + regression)
-              test_path.write_text(test_text)
+              test_path.write_text(test_text.replace(anchor, anchor + "\n" + regression))
               print("Added runtime-default regression assertion")
           else:
               print("Runtime-default regression assertion already present")
-
-          original_workflow = '''name: Test
-
-          on:
-            push:
-            pull_request:
-
-          permissions:
-            contents: read
-
-          jobs:
-            test:
-              runs-on: ubuntu-latest
-              steps:
-                - name: Checkout
-                  uses: actions/checkout@v4
-
-                - name: Setup Node
-                  uses: actions/setup-node@v4
-                  with:
-                    node-version: 20
-                    cache: npm
-
-                - name: Install dependencies
-                  run: npm ci
-
-                - name: Install Playwright browser
-                  run: npx playwright install --with-deps --only-shell chromium
-
-                - name: Run tests
-                  run: npm test
-          '''
-          Path(".github/workflows/test.yml").write_text(original_workflow)
-          print("Restored standard Test workflow in the pending commit")
           PY
 
       - name: Check server syntax
@@ -119,7 +83,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/server.js test/server-metadata.test.js .github/workflows/test.yml
+          git add src/server.js test/server-metadata.test.js
           git commit -m "Align analyze-page runtime default"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
