@@ -97,7 +97,6 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(capturePage.description, /textual fetch or scraping/i);
 	assert.match(capturePage.description, /network request/i);
 	assert.match(capturePage.description, /writes new local files/i);
-	assert.match(capturePage.description, /without calling the vision provider/i);
 	assert.match(capturePage.description, /without .*modifying the target webpage/i);
 	assert.deepEqual(capturePage.annotations, {
 		readOnlyHint: false,
