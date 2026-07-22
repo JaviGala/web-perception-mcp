@@ -61,6 +61,9 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 		"without visual interpretation",
 		"textual webpage",
 		"fetch",
+		"viewport by default",
+		"multiple scroll positions",
+		"complete-page image",
 	]) {
 		assert.ok(instructions.includes(expected), `Instructions should mention ${expected}`);
 	}
@@ -82,6 +85,7 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(capturePage.description, /use analyze_page_screenshot instead/i);
 	assert.match(capturePage.description, /textual fetch or scraping/i);
 	assert.deepEqual(capturePage.inputSchema.required, ["url"]);
+	assert.equal(capturePage.inputSchema.properties.screenshot_mode.default, "viewport");
 	assert.equal(capturePage.inputSchema.properties.include_open_command.default, false);
 	assert.match(
 		capturePage.inputSchema.properties.include_open_command.description,
@@ -93,9 +97,13 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(analyzePage.description, /layout|visual hierarchy/i);
 	assert.match(analyzePage.description, /primarily textual retrieval/i);
 	assert.deepEqual(analyzePage.inputSchema.required, ["url", "prompt"]);
+	assert.equal(analyzePage.inputSchema.properties.screenshot_mode.default, "viewport");
+	assert.match(analyzePage.inputSchema.properties.screenshot_mode.description, /viewport by default/i);
+	assert.match(analyzePage.inputSchema.properties.screenshot_mode.description, /do not use sections merely/i);
+	assert.match(analyzePage.inputSchema.properties.screenshot_mode.description, /multiple images/i);
 	assert.match(
 		analyzePage.inputSchema.properties.screenshot_mode.description,
-		/sections for long or scrollable pages/i,
+		/sections only when the task requires ordered coverage/i,
 	);
 	assert.match(
 		analyzePage.inputSchema.properties.screenshot_mode.description,

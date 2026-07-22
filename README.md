@@ -43,6 +43,13 @@ Review the provider's privacy, retention, and data-processing policies before an
 
 The server also supplies concise MCP instructions and tool descriptions so compatible clients can help models distinguish these cases. Some clients prefix tool names with the configured server identifier; models should use the exact tool names exposed by the client rather than reconstructing them.
 
+### Choosing a screenshot mode
+
+- `viewport` is the default. Use it for short pages, the initial visible state, or when the task does not require content below the first viewport.
+- `sections` captures ordered viewport-sized images across a long page. Use it only when the task requires content from multiple scroll positions. It is not a safer default: it can create and analyse multiple images.
+- `full_page` creates one complete-page image. Reserve it for specifically requested, reasonably short pages; very tall images can reduce visual legibility.
+- `element` captures one CSS selector when the task concerns a specific visible component.
+
 ## Requirements
 
 - Node.js 18+

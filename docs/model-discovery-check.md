@@ -25,7 +25,8 @@ Run each case in a fresh conversation. Replace placeholder paths or URLs only wh
 | --- | --- | --- |
 | Local screenshot | `Analyse the visible layout and controls in /absolute/path/to/screenshot.png.` | Use `analyze_image` with the local path and a relevant prompt. |
 | Local chart | `Explain the main visual pattern in /absolute/path/to/chart.png.` | Use `analyze_image`. |
-| Visual webpage | `Inspect https://example.com as rendered and describe its visual hierarchy.` | Use `analyze_page_screenshot`. |
+| Short visual webpage | `Inspect https://example.com as rendered and describe its visual hierarchy.` | Use `analyze_page_screenshot` with `screenshot_mode: "viewport"`. |
+| Long visual webpage | `Inspect the MDN JavaScript Guide as rendered and describe its overall layout and structure across the page.` | Use `analyze_page_screenshot` with `screenshot_mode: "sections"` to cover multiple scroll positions. |
 | Canvas or rendered state | `Look at https://example.com/app and explain what is visible in the rendered canvas.` | Use `analyze_page_screenshot`. |
 | Screenshot file only | `Save a viewport screenshot of https://example.com. Do not analyse it.` | Use `capture_page_screenshot`. |
 | Textual negative control | `Fetch and summarise the main text from https://example.com.` | Do not use a web-perception visual tool when an ordinary fetch tool is available. |
