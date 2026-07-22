@@ -47,7 +47,7 @@ The server also supplies concise MCP instructions and tool descriptions so compa
 
 - Node.js 18+
 - An MCP client that can run local `stdio` servers
-- An API key for a vision provider with an OpenAI-style `/chat/completions` endpoint
+- An API key for a vision provider with an OpenAI-style `/chat/completions` endpoint when using either analysis tool
 - Playwright Chromium Headless Shell for webpage capture or analysis
 
 ## Install

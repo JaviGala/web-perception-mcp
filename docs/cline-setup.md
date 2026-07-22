@@ -15,7 +15,7 @@ The MCP gives a non-visual coding agent access to local image analysis, rendered
 
 - Node.js 18 or newer.
 - Cline installed in VS Code or another supported IDE.
-- An API key for a compatible vision provider.
+- An API key for a compatible vision provider when using either analysis tool.
 - Playwright Chromium Headless Shell for webpage screenshots.
 - A local clone of this repository.
 
