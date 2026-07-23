@@ -182,7 +182,7 @@ const TOOLS = [
 	},
 	{
 		name: "analyze_page_screenshot",
-		description: `Render a public webpage, capture screenshot(s), and analyze its visual appearance with the configured vision model. Makes a network request, launches a local headless browser, writes screenshot files locally, and sends the screenshots, prompt, and included page context to the configured vision provider; this may expose content and consume quota. Sections mode may send multiple images and increase latency and provider usage; it returns coverage metadata and a warning when the configured limit is reached before the page end. Use when the answer depends on layout, visual hierarchy, canvas content, charts, rendered state, or other information not reliably available from text or HTML alone. Do not use for primarily textual retrieval when fetch, search, or scraping is sufficient. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
+		description: `Render a public webpage, capture screenshot(s), and analyze its visual appearance with the configured vision model. Makes a network request, launches a local headless browser, writes screenshot files locally, and sends the screenshots, prompt, and included page context to the configured vision provider; this may expose content and consume quota. Sections mode may send multiple images, increase latency and provider usage, and return a coverage warning if the limit is reached before the page end. Use when the answer depends on layout, visual hierarchy, canvas content, charts, rendered state, or other information not reliably available from text or HTML alone. Do not use for primarily textual retrieval when fetch, search, or scraping is sufficient. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
 		annotations: {
 			readOnlyHint: false,
 			destructiveHint: false,
