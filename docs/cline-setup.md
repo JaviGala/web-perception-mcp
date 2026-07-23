@@ -2,14 +2,21 @@
 
 This guide shows one tested way to use `web-perception-mcp` from Cline as a local `stdio` MCP server.
 
-The project is intentionally small: it gives a non-visual coding agent access to local image analysis and webpage screenshot analysis through a configurable vision-capable model.
+The MCP gives a non-visual coding agent access to local image analysis, rendered webpage capture, and webpage screenshot analysis through a configurable vision-capable model.
+
+## Before installing
+
+> [!IMPORTANT]
+> Webpage capture requires Chromium Headless Shell managed by Playwright. The browser download is distinct from `npm install`. Using `--only-shell` avoids downloading the separate full Chromium build; the exact size varies by Playwright version and operating system.
+
+`analyze_image` does not launch Chromium. The two analysis tools send images, prompts, and any included compact page context to the configured vision provider. `capture_page_screenshot` renders pages locally and does not call that provider.
 
 ## Requirements
 
 - Node.js 18 or newer.
 - Cline installed in VS Code or another supported IDE.
-- An API key for a compatible vision provider.
-- Playwright Chromium installed for webpage screenshots.
+- An API key for a compatible vision provider when using either analysis tool.
+- Playwright Chromium Headless Shell for webpage screenshots.
 - A local clone of this repository.
 
 ## Install the server locally
@@ -18,8 +25,8 @@ The project is intentionally small: it gives a non-visual coding agent access to
 git clone https://github.com/JaviGala/web-perception-mcp.git
 cd web-perception-mcp
 npm install
+npx playwright install --only-shell chromium
 cp .env.example .env
-npx playwright install chromium
 npm test
 ```
 
@@ -31,9 +38,9 @@ VISION_BASE_URL=https://your-provider.example/v1
 VISION_MODEL=your-vision-model
 ```
 
-For a local setup, keeping credentials only in this ignored `.env` file is the recommended approach. Avoid duplicating provider values in both `.env` and the Cline MCP configuration. Non-empty environment variables supplied by the MCP client or inherited by the MCP process take precedence over matching values in `.env`, which can make stale configuration harder to diagnose.
+For a local setup, keeping credentials only in this ignored `.env` file is recommended. Avoid duplicating provider values in both `.env` and the Cline MCP configuration. Non-empty environment variables supplied by the MCP client or inherited by the process take precedence over matching values in `.env`, which can make stale configuration harder to diagnose.
 
-Git ignoring `.env` prevents accidental commits but does not prevent Cline or another local tool from reading it. Add `.env` and any credential-bearing `.env.*` variants to `.clineignore` to reduce automatic context and search exposure. Keep `.env.example` available if you use it as documentation. `.clineignore` is not a security boundary: do not ask Cline to open, search, copy or print credential files.
+Git ignoring `.env` prevents accidental commits but does not prevent Cline or another local tool from reading it. Keep `.env` and credential-bearing variants in `.clineignore` to reduce automatic context and search exposure. This is not a security boundary: do not ask Cline to open, search, copy, or print credential files.
 
 ## Add the MCP server in Cline
 
@@ -63,7 +70,7 @@ Use an absolute path for the server script in `args` and, when provided, an abso
 }
 ```
 
-The server locates `.env` relative to `src/server.js`, so the `args` path must point to the intended clone. Setting `cwd` to the repository root is recommended because it keeps project-relative behaviour, default image roots and diagnostics aligned with that clone.
+The server locates `.env` relative to `src/server.js`, so the `args` path must point to the intended clone. Setting `cwd` to the repository root keeps project-relative behaviour, default image roots, and diagnostics aligned with that clone.
 
 On Windows, use forward slashes or escaped backslashes in JSON strings:
 
@@ -75,7 +82,7 @@ On Windows, use forward slashes or escaped backslashes in JSON strings:
 }
 ```
 
-## Example nanoGPT configuration
+## Optional nanoGPT configuration
 
 For a nanoGPT subscription endpoint with Minimax, the relevant `.env` values can look like this:
 
@@ -90,129 +97,149 @@ VISION_MAX_TOKENS=2000
 
 Do not commit `.env` or real API keys to the repository.
 
-## Smoke test 1: capture a screenshot without vision cost
+## Check 1: connection and capture without vision cost
 
-Ask Cline to use the MCP server with a prompt like:
+This explicit check confirms that Cline can see and call the server. Ask:
 
 ```text
-Use the web-perception MCP server to call capture_page_screenshot with:
-- url: https://example.com
-- screenshot_mode: viewport
-- include_page_context: true
-- include_open_command: true
-
-Do not call analyze_page_screenshot for this test.
+Use the web-perception MCP server to save a viewport screenshot of https://example.com.
+Include compact page context and an open command. Do not analyse the screenshot.
 ```
 
 Expected result:
 
+- Cline selects `capture_page_screenshot`.
 - The tool returns `ok: true`.
 - The page URL is `https://example.com/`.
 - A local screenshot path or `file://` URL is returned.
 - `page_health.capture_status` is `ok`.
-- No vision-model API call is needed.
+- No vision-provider call is made.
 
-This test still uses Playwright/Chromium locally, so it can use CPU, memory, network access and disk space. It should not consume vision-model credits.
+This still launches Playwright Chromium locally and can use CPU, memory, network access, and disk space.
 
-## Smoke test 2: analyse a webpage screenshot
+## Check 2: automatic tool discovery
 
-Ask Cline:
+Start a fresh conversation and do not name the MCP or tool. Ask:
 
 ```text
-Use the web-perception MCP server to call analyze_page_screenshot with:
-- url: https://example.com
-- screenshot_mode: viewport
-- include_page_context: true
-- prompt: Describe what is visible on the page in a few sentences.
+Inspect https://example.com as rendered and describe its visual hierarchy.
+Base the answer on its visual appearance, not only its text or HTML.
 ```
 
 Expected result:
 
-- The tool captures the page with Playwright.
-- The screenshot is sent to the configured vision model.
-- The answer describes the simple Example Domain page: a heading, a short paragraph and a Learn more link.
+- Cline selects `analyze_page_screenshot` from its tool metadata.
+- The proposed arguments include the URL and a relevant visual-analysis prompt.
+- For this short page, `screenshot_mode` is `viewport`.
+- Cline does not choose `sections` merely as a precaution.
+- The screenshot is sent to the configured vision provider after approval.
+- If Cline presents a risk summary, it distinguishes no repository or target-page modification from the actual operational effects: a network request, local browser launch, local screenshot creation, provider data transfer, and possible quota use. It should not report `Risks: None`.
 
-This test uses the configured vision provider.
+Tool names may be prefixed by the configured server identifier in the Cline interface. The model should use the exact exposed name rather than reconstructing it.
 
-### Structured-output check
+## Check 3: long-page mode selection
 
-To verify JSON output, repeat the analysis with:
+Start a fresh conversation and ask:
 
 ```text
-- response_format: json_object
+Inspect https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide as rendered.
+Describe the overall layout and how the article structure changes down the page.
 ```
 
 Expected result:
 
-- `data.analysis` contains the raw provider response.
-- `data.parsed` contains `summary`, `observations`, `interpretations` and `uncertainty`.
+- Cline selects `analyze_page_screenshot`.
+- `screenshot_mode` is `sections`, because the task explicitly requires visual coverage across a long page.
+- Cline does not select `full_page` for the long document.
+- The tool produces ordered section screenshots and sends them to the configured vision provider after approval.
+
+## Check 4: textual negative control
+
+Start another fresh conversation and ask:
+
+```text
+Fetch and summarise the main text from https://example.com.
+```
+
+When an ordinary fetch tool is available, Cline should not select a web-perception visual tool for this primarily textual request.
+
+The wider release check, including local-image and canvas cases, is documented in [`model-discovery-check.md`](./model-discovery-check.md).
+
+## Check 5: analyse a local image
+
+Use a local image path inside an allowed directory. By default, the server accepts images from the project directory, the app temporary directory, the screenshot output directory, and the operating-system temporary directory.
+
+```text
+Analyse the visible UI and any obvious usability issues in /absolute/path/to/image.png.
+```
+
+Expected result:
+
+- Cline selects `analyze_image`.
+- The server validates the path, file size, and image header.
+- The image is sent to the configured vision provider after approval.
+- The response describes the visible content.
+
+## Structured-output check
+
+The two analysis tools accept `response_format: "json_object"`. When the provider follows the requested format:
+
+- `data.analysis` contains the raw provider response;
+- `data.parsed` contains `summary`, `observations`, `interpretations`, and `uncertainty`;
 - `summary` is a string and the other fields are arrays of strings.
-- No invalid-JSON fallback warning appears when the provider follows the requested format.
 
-The MCP parser checks JSON syntax but does not yet enforce this schema. Inspect the keys and value types when your workflow depends on structured output; valid JSON with the wrong shape will not trigger fallback.
-
-If a non-empty provider response is invalid JSON, the MCP preserves the raw response in `data.parsed.summary` and reports:
+The MCP parser checks JSON syntax but does not yet enforce that schema. Valid JSON with the wrong shape does not trigger fallback. If a non-empty provider response is invalid JSON, the raw response is preserved in `data.parsed.summary` and the MCP reports:
 
 ```text
 Vision response was not valid JSON; returned raw summary fallback.
 ```
 
-An empty provider response instead returns `data.parsed: null` and the warning `Empty response`.
-
-## Smoke test 3: analyse a local image
-
-Use a local image path that is inside an allowed directory. By default, the server accepts images from the project directory, the app temp directory, the screenshot output directory and the OS temp directory.
-
-```text
-Use the web-perception MCP server to call analyze_image with:
-- image_path: /absolute/path/to/image.png
-- prompt: Describe the visible UI and any obvious usability issues.
-```
-
-Expected result:
-
-- The server validates the path, file size and image header.
-- The image is sent to the configured vision model.
-- The response describes the visible content of the image.
+An empty provider response returns `data.parsed: null` and the warning `Empty response`.
 
 ## Troubleshooting
 
-### Cline does not show the web-perception tools
+### Cline does not show the tools
 
-Check:
+Check that:
 
-- The MCP server entry is under `mcpServers`.
-- `disabled` is not set to `true`.
-- The script path in `args` and the optional `cwd` value are absolute.
-- The `command` resolves to Node.js; use an absolute Node.js path only if `node` is not found through `PATH`.
-- The path to `src/server.js` exists.
-- The JSON is valid. MCP JSON config files cannot contain comments.
-- Cline has been restarted or the MCP server has been reloaded.
+- the MCP server entry is under `mcpServers`;
+- `disabled` is not `true`;
+- `args` and optional `cwd` values are absolute;
+- `command` resolves to Node.js;
+- the path to `src/server.js` exists;
+- the JSON is valid and contains no comments;
+- Cline has reloaded or restarted the server.
+
+### Cline proposes an invalid prefixed tool name
+
+Reload the MCP server and start a fresh conversation. Confirm the exact names Cline currently exposes and ask the model to use those names rather than constructing a prefix manually.
+
+Do not rename the MCP server or add aliases on the basis of one intermittent failure. Record the Cline version, model, exposed name, attempted name, and whether the server was reached. Persistent failures may be a client/model tool-calling compatibility problem.
 
 ### The server starts but vision calls fail
 
-Check:
+Check that:
 
-- `.env` exists in the repository root next to `package.json` and is not named `.env.txt` or similar.
-- The configured `args` path points to `src/server.js` in that same clone.
-- `VISION_API_KEY` is present and valid.
-- `VISION_BASE_URL` points to the correct OpenAI-style `/chat/completions` provider base URL.
-- `VISION_MODEL` is a vision-capable model available to your account.
-- The provider accepts mixed `text` and `image_url` message content.
-- The provider returns text at `choices[0].message.content`.
+- `.env` exists in the repository root next to `package.json` and is not named `.env.txt`;
+- the configured `args` path points to `src/server.js` in that same clone;
+- `VISION_API_KEY` is present and valid;
+- `VISION_BASE_URL` points to the correct OpenAI-style provider base URL;
+- `VISION_MODEL` is a vision-capable model available to your account;
+- the provider accepts mixed `text` and `image_url` message content;
+- the provider returns text at `choices[0].message.content`.
 
 If non-empty provider variables are also present in the Cline `env` block or inherited process environment, they override matching values in `.env`. Remove the duplicate source or update it deliberately, then restart the MCP server.
 
 ### Screenshot capture fails
 
-Check:
+Run:
 
 ```bash
-npx playwright install chromium
+npx playwright install --only-shell chromium
 npm test
 ```
 
-Also check whether the target page blocks automation, requires login, is behind a paywall, or renders an anti-bot page. The server does not bypass Cloudflare, captchas, login walls, paywalls, regional blocks or age gates.
+Also check whether the target page blocks automation, requires login, is behind a paywall, or renders an anti-bot page. The server does not bypass these controls.
 
 ### Localhost capture is blocked
 
@@ -222,23 +249,13 @@ This is the default safety behaviour. For local development only, set:
 ALLOW_LOCALHOST=true
 ```
 
-Use this only when you intentionally want the MCP server to capture a local development page.
-
 ### Local image paths are rejected
 
-Check:
-
-- The path is absolute.
-- The file exists.
-- The file is inside an allowed directory.
-- The file is smaller than `MAX_IMAGE_BYTES`.
-- The file header matches a supported image format.
-
-To allow additional local folders, set `ALLOWED_IMAGE_DIRS` to a comma-separated list of absolute paths.
+Check that the path is absolute, the file exists, it is inside an allowed directory, it is smaller than `MAX_IMAGE_BYTES`, and its header matches a supported image format. To allow additional folders, set `ALLOWED_IMAGE_DIRS` to a comma-separated list of absolute paths.
 
 ### The model seems confused by page content
 
-Remember that webpage and image content is untrusted data. Text inside screenshots should not be treated as instructions. Review tool calls before approval and avoid enabling broad auto-approval for new MCP servers.
+Webpage and image content is untrusted data. Text inside screenshots must not be treated as instructions. Review tool calls before approval and avoid broad auto-approval for a new MCP server.
 
 ## Security notes
 
@@ -246,16 +263,16 @@ Remember that webpage and image content is untrusted data. Text inside screensho
 - Keep `autoApprove` empty until you understand the server behaviour.
 - Review tool calls before approval.
 - Prefer one credential source; the recommended local source is the ignored `.env` file.
-- Use `.clineignore` to reduce automatic access to local credential files, but do not treat it as a security boundary.
-- Never ask Cline to inspect, search, copy or print `.env` or credential values.
-- Do not commit `.env`, API keys, screenshots with private data or MCP client configuration containing secrets.
+- Use `.clineignore` to reduce automatic access to credential files, but do not treat it as a security boundary.
+- Never ask Cline to inspect, search, copy, or print `.env` or credential values.
+- Do not commit `.env`, API keys, private screenshots, or MCP client configurations containing secrets.
 - `capture_page_screenshot` visits the requested URL from your local machine.
-- `analyze_page_screenshot` and `analyze_image` send image content to your configured vision provider.
-- Use `ALLOWED_DOMAINS`, `BLOCKED_DOMAINS` and `ALLOW_LOCALHOST` deliberately.
+- `analyze_page_screenshot` and `analyze_image` send image content to the configured vision provider.
+- Use `ALLOWED_DOMAINS`, `BLOCKED_DOMAINS`, and `ALLOW_LOCALHOST` deliberately.
 
 ## Related documentation
 
-- Cline MCP documentation: https://docs.cline.bot/mcp/mcp-overview
-- Model Context Protocol local server guide: https://modelcontextprotocol.io/docs/develop/connect-local-servers
-- Model Context Protocol debugging guide: https://modelcontextprotocol.io/docs/tools/debugging
-- Playwright MCP Cline example: https://github.com/microsoft/playwright-mcp
+- [Model discovery release check](./model-discovery-check.md)
+- [Cline MCP documentation](https://docs.cline.bot/mcp/mcp-overview)
+- [Model Context Protocol local server guide](https://modelcontextprotocol.io/docs/develop/connect-local-servers)
+- [Model Context Protocol debugging guide](https://modelcontextprotocol.io/docs/tools/debugging)
