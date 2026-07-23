@@ -30,7 +30,7 @@ jobs:
         run: npm test
 
   apply-sections-warning:
-    if: github.event_name == 'push'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
