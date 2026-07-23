@@ -1,0 +1,5 @@
+/home/runner/work/web-perception-mcp/web-perception-mcp/scripts/refine-metadata-temp.py:77: SyntaxWarning: invalid escape sequence '\s'
+  test_content = '''import test from "node:test";
+Expected one screenshot mode description, found 0
+exit_code=1
+--- git diff --stat ---
