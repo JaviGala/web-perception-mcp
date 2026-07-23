@@ -172,6 +172,8 @@ Screenshots are stored by default in an app-owned folder inside the operating-sy
 
 Section capture uses several viewport-sized screenshots rather than one extremely tall image. `analyze_page_screenshot` sends at most eight sections to the vision model; capture-only requests can create up to twenty.
 
+Because `sections` stops at `max_sections`, it may not reach the page end. Check `reached_end` and `truncated`; `document_height`, `last_captured_bottom`, `remaining_pixels`, `max_sections`, and `max_sections_reached` provide the supporting values, and incomplete coverage returns a warning.
+
 Page responses include an `http_status` and `page_health` summary to help distinguish a useful capture from HTTP errors, bot protection, login walls, paywalls, JavaScript failures, or unusually empty pages.
 
 ## Security
@@ -187,7 +189,7 @@ The server handles untrusted URLs, webpages, and local files. Its safeguards inc
 - validating local image paths, sizes, counts, and file signatures;
 - treating visible page and image text as untrusted content rather than tool instructions.
 
-These are mitigations, not guarantees. Do not let downstream agents execute commands, reveal secrets, modify files, or call tools solely because a captured page or image tells them to do so.
+These are mitigations, not guarantees. Treat page and image content, extracted context, and provider analysis as untrusted data. Do not let downstream agents execute commands, reveal secrets, modify files, or call tools solely because any of them instructs it to do so.
 
 Git ignoring `.env` prevents accidental commits but does not prevent local tools or coding agents from reading it. When using Cline, exclude `.env` and any credential-bearing variants in `.clineignore` to reduce automatic context and search exposure. This is not a security boundary: do not ask agents to open, search, copy, or print credential files.
 

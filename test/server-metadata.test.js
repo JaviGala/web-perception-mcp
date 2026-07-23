@@ -64,6 +64,7 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 		"ordered long-page",
 		"coverage metadata and warnings",
 		"untrusted data",
+		"provider analysis",
 		"network",
 		"write screenshots",
 		"configured provider",
@@ -85,6 +86,7 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(analyzeImage.description, /do not use for urls/i);
 	assert.match(analyzeImage.description, /does not modify files/i);
 	assert.match(analyzeImage.description, /provider or consume quota/i);
+	assert.match(analyzeImage.description, /provider analysis as untrusted data/i);
 	assert.deepEqual(analyzeImage.annotations, {
 		readOnlyHint: true,
 		destructiveHint: false,
@@ -104,6 +106,7 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(capturePage.description, /writes files/i);
 	assert.match(capturePage.description, /does not call the vision provider/i);
 	assert.match(capturePage.description, /modify the target page/i);
+	assert.match(capturePage.description, /extracted context as untrusted data/i);
 	assert.deepEqual(capturePage.annotations, {
 		readOnlyHint: false,
 		destructiveHint: false,
@@ -131,6 +134,7 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(analyzePage.description, /multiple images/i);
 	assert.match(analyzePage.description, /coverage metadata/i);
 	assert.match(analyzePage.description, /warnings/i);
+	assert.match(analyzePage.description, /provider analysis as untrusted data/i);
 	assert.deepEqual(analyzePage.annotations, {
 		readOnlyHint: false,
 		destructiveHint: false,
