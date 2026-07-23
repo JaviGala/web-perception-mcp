@@ -83,6 +83,18 @@ test("takeScreenshot sections returns multiple ordered screenshots", async () =>
 		assert.equal(screenshot.metadata.mode, "sections");
 		assert.equal(screenshot.paths.length, 3);
 		assert.equal(screenshot.metadata.sections.length, 3);
+		assert.equal(screenshot.metadata.max_sections, 3);
+		assert.equal(screenshot.metadata.max_sections_reached, true);
+		assert.equal(screenshot.metadata.reached_end, false);
+		assert.equal(screenshot.metadata.truncated, true);
+		assert.equal(
+			screenshot.metadata.last_captured_bottom < screenshot.metadata.document_height,
+			true,
+		);
+		assert.equal(
+			screenshot.metadata.remaining_pixels,
+			screenshot.metadata.document_height - screenshot.metadata.last_captured_bottom,
+		);
 		assert.equal(screenshot.metadata.sections[0].index, 1);
 		assert.equal(screenshot.metadata.sections[1].y > screenshot.metadata.sections[0].y, true);
 		for (const path of screenshot.paths) {
@@ -118,6 +130,13 @@ test("takeScreenshot sections records the browser's actual final scroll position
 		assert.equal(lastSection.y, expectedLastY);
 		assert.equal(new Set(sections.map((section) => section.y)).size, sections.length);
 		assert.equal(lastSection.y + lastSection.height >= screenshot.metadata.dimensions.height, true);
+		assert.equal(screenshot.metadata.reached_end, true);
+		assert.equal(screenshot.metadata.truncated, false);
+		assert.equal(screenshot.metadata.remaining_pixels, 0);
+		assert.equal(
+			screenshot.metadata.last_captured_bottom,
+			screenshot.metadata.document_height,
+		);
 	} finally {
 		await context?.close().catch(() => {});
 		await closeBrowser();

@@ -63,6 +63,7 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 		"fetch",
 		"viewport by default",
 		"multiple scroll positions",
+		"does not guarantee complete-page coverage",
 		"complete-page image",
 		"network requests",
 		"writes local files",
@@ -120,6 +121,8 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(analyzePage.description, /included page context/i);
 	assert.match(analyzePage.description, /consume quota/i);
 	assert.match(analyzePage.description, /multiple images/i);
+	assert.match(analyzePage.description, /coverage metadata/i);
+	assert.match(analyzePage.description, /returns? .*warning/i);
 	assert.deepEqual(analyzePage.annotations, {
 		readOnlyHint: false,
 		destructiveHint: false,
@@ -135,6 +138,11 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(analyzePage.inputSchema.properties.screenshot_mode.description, /viewport by default/i);
 	assert.match(analyzePage.inputSchema.properties.screenshot_mode.description, /do not use sections merely/i);
 	assert.match(analyzePage.inputSchema.properties.screenshot_mode.description, /multiple images/i);
+	assert.match(
+		analyzePage.inputSchema.properties.screenshot_mode.description,
+		/do not assume it covers the complete page/i,
+	);
+	assert.match(analyzePage.inputSchema.properties.max_sections.description, /returns a warning/i);
 	assert.match(
 		analyzePage.inputSchema.properties.screenshot_mode.description,
 		/sections only when the task requires ordered coverage/i,

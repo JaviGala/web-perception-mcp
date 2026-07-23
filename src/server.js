@@ -20,7 +20,11 @@ import { extractPageContext } from "./extraction.js";
 import { launchBrowser, navigatePage, takeScreenshot } from "./browser.js";
 import { buildPageHealth } from "./page-health.js";
 import { sendToVisionModel, buildVisualPrompt, parseVisualResult } from "./vision.js";
-import { buildScreenshotSectionContext, screenshotImagePaths } from "./screenshot-result.js";
+import {
+	buildScreenshotSectionContext,
+	screenshotCaptureWarnings,
+	screenshotImagePaths,
+} from "./screenshot-result.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -44,6 +48,7 @@ const SERVER_INSTRUCTIONS = [
 	"Use capture_page_screenshot when screenshot files are needed without visual interpretation.",
 	"Use viewport by default for short pages, the initial visible state, or when the task does not require content below the first viewport.",
 	"Use sections only when the task requires ordered coverage across a long page or multiple scroll positions; do not choose it merely as a precaution because it can create and analyze multiple images.",
+	"Sections mode does not guarantee complete-page coverage; check the returned coverage metadata and warnings before claiming that the end of the page was reached.",
 	"Use full_page only when one complete-page image is specifically required and the page is reasonably short; use element only for one CSS selector.",
 	"The tools do not edit target webpages or source images. Webpage tools make network requests and launch a local browser; screenshot capture writes local files; analysis tools send image content and prompts to the configured provider and may consume provider quota.",
 	"Do not use these tools for primarily textual webpage retrieval when an ordinary fetch, search, or scraping tool is sufficient.",
@@ -66,7 +71,7 @@ function screenshotModeSchema(defaultMode = "viewport") {
 		enum: ["viewport", "full_page", "element", "sections"],
 		default: defaultMode,
 		description:
-			"Use viewport by default for short pages, the initial visible state, or when the task does not require content below the first viewport. Use sections only when the task requires ordered coverage of a long page or multiple scroll positions, such as comparing distant sections or inspecting sticky UI. Do not use sections merely 'to be safe' because it can create and analyze multiple images. Use full_page only when one complete-page image is specifically required and the page is reasonably short. Use element only for one CSS selector.",
+			"Use viewport by default for short pages, the initial visible state, or when the task does not require content below the first viewport. Use sections only when the task requires ordered coverage of a long page or multiple scroll positions, such as comparing distant sections or inspecting sticky UI. Do not use sections merely 'to be safe' because it can create and analyze multiple images, and do not assume it covers the complete page: check the returned coverage metadata and warnings. Use full_page only when one complete-page image is specifically required and the page is reasonably short. Use element only for one CSS selector.",
 	};
 }
 
@@ -106,7 +111,7 @@ function pageCaptureProperties(defaultScreenshotMode = "viewport", maxSectionsMa
 			minimum: 1,
 			maximum: maxSectionsMaximum,
 			default: 6,
-			description: "Maximum number of ordered viewport screenshots when screenshot_mode is sections.",
+			description: "Maximum number of ordered viewport screenshots when screenshot_mode is sections. If this limit is reached before the page end, the result reports incomplete coverage and returns a warning.",
 		},
 		section_overlap: {
 			type: "integer",
@@ -177,7 +182,7 @@ const TOOLS = [
 	},
 	{
 		name: "analyze_page_screenshot",
-		description: `Render a public webpage, capture screenshot(s), and analyze its visual appearance with the configured vision model. Makes a network request, launches a local headless browser, writes screenshot files locally, and sends the screenshots, prompt, and included page context to the configured vision provider; this may expose content and consume quota. Sections mode may send multiple images and increase latency and provider usage. Use when the answer depends on layout, visual hierarchy, canvas content, charts, rendered state, or other information not reliably available from text or HTML alone. Do not use for primarily textual retrieval when fetch, search, or scraping is sufficient. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
+		description: `Render a public webpage, capture screenshot(s), and analyze its visual appearance with the configured vision model. Makes a network request, launches a local headless browser, writes screenshot files locally, and sends the screenshots, prompt, and included page context to the configured vision provider; this may expose content and consume quota. Sections mode may send multiple images and increase latency and provider usage; it returns coverage metadata and a warning when the configured limit is reached before the page end. Use when the answer depends on layout, visual hierarchy, canvas content, charts, rendered state, or other information not reliably available from text or HTML alone. Do not use for primarily textual retrieval when fetch, search, or scraping is sufficient. ${UNTRUSTED_VISUAL_CONTENT_NOTE}`,
 		annotations: {
 			readOnlyHint: false,
 			destructiveHint: false,
@@ -394,7 +399,7 @@ async function handleCapturePageScreenshot(args = {}) {
 				screenshot_paths: result.imagePaths,
 				...screenshotDebug,
 			},
-			pageHealth.warnings,
+			[...pageHealth.warnings, ...screenshotCaptureWarnings(result.screenshot)],
 			{
 				tool: "capture_page_screenshot",
 				duration_ms: Date.now() - startTime,
@@ -431,6 +436,7 @@ async function handleAnalyzePageScreenshot(args = {}) {
 		const parsed = args.response_format === "json_object" ? parseVisualResult(visionResult.content) : null;
 		const warnings = [
 			...pageHealth.warnings,
+			...screenshotCaptureWarnings(result.screenshot),
 			...(parsed?.warning ? [parsed.warning] : []),
 		];
 

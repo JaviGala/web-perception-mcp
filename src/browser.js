@@ -227,6 +227,7 @@ export async function takeScreenshot(page, options = {}) {
 	let dimensions = viewport;
 	let paths = [path];
 	let sections = null;
+	let coverage = null;
 
 	if (mode === "full_page") {
 		dimensions = await getPageDimensions(page, viewport);
@@ -241,6 +242,7 @@ export async function takeScreenshot(page, options = {}) {
 		});
 		paths = result.paths;
 		sections = result.sections;
+		coverage = result.coverage;
 		dimensions = result.dimensions;
 	} else if (mode === "element") {
 		const element = await resolveElement(page, { elementRef, selector });
@@ -287,6 +289,7 @@ export async function takeScreenshot(page, options = {}) {
 			deviceScaleFactor: 1,
 			mode,
 			sections,
+			...(coverage || {}),
 		},
 	};
 }
@@ -373,9 +376,25 @@ async function takeSectionScreenshots(page, options) {
 		if (actualY + viewport.height >= dimensions.height) break;
 	}
 
+	const finalDimensions = await getPageDimensions(page, dimensions);
+	const lastSection = sections.at(-1);
+	const lastCapturedBottom = lastSection
+		? Math.min(finalDimensions.height, lastSection.y + lastSection.height)
+		: 0;
+	const reachedEnd = lastCapturedBottom >= finalDimensions.height;
+	const coverage = {
+		document_height: finalDimensions.height,
+		last_captured_bottom: lastCapturedBottom,
+		remaining_pixels: Math.max(0, finalDimensions.height - lastCapturedBottom),
+		reached_end: reachedEnd,
+		truncated: !reachedEnd,
+		max_sections_reached: sections.length >= maxSections,
+		max_sections: maxSections,
+	};
+
 	await page.evaluate(({ x, y }) => window.scrollTo(x, y), originalScroll);
 
-	return { paths, sections, dimensions };
+	return { paths, sections, dimensions: finalDimensions, coverage };
 }
 
 export async function closeBrowser() {
