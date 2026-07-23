@@ -56,18 +56,19 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 		"analyze_image",
 		"analyze_page_screenshot",
 		"capture_page_screenshot",
-		"local image",
-		"rendered appearance",
-		"without visual interpretation",
-		"textual webpage",
-		"fetch",
+		"existing local images",
+		"screenshot files without interpretation",
+		"visual interpretation of rendered webpages",
+		"fetch or scraping",
 		"viewport by default",
-		"multiple scroll positions",
-		"does not guarantee complete-page coverage",
-		"complete-page image",
-		"network requests",
-		"writes local files",
-		"provider quota",
+		"ordered long-page",
+		"coverage metadata and warnings",
+		"untrusted data",
+		"network",
+		"write screenshots",
+		"configured provider",
+		"consume quota",
+		"do not modify source images or target webpages",
 	]) {
 		assert.ok(instructions.includes(expected), `Instructions should mention ${expected}`);
 	}
@@ -79,10 +80,11 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	);
 
 	const analyzeImage = findTool(tools, "analyze_image");
+	assert.equal(analyzeImage.title, "Analyze Image");
 	assert.match(analyzeImage.description, /existing local image/i);
 	assert.match(analyzeImage.description, /do not use for urls/i);
-	assert.match(analyzeImage.description, /without modifying them/i);
-	assert.match(analyzeImage.description, /consume quota/i);
+	assert.match(analyzeImage.description, /does not modify files/i);
+	assert.match(analyzeImage.description, /provider or consume quota/i);
 	assert.deepEqual(analyzeImage.annotations, {
 		readOnlyHint: true,
 		destructiveHint: false,
@@ -93,12 +95,15 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(analyzeImage.inputSchema.properties.image_path.description, /allowed_image_dirs/i);
 
 	const capturePage = findTool(tools, "capture_page_screenshot");
-	assert.match(capturePage.description, /without calling the vision provider/i);
-	assert.match(capturePage.description, /use analyze_page_screenshot instead/i);
-	assert.match(capturePage.description, /textual fetch or scraping/i);
+	assert.equal(capturePage.title, "Capture Page Screenshot");
+	assert.match(capturePage.description, /without visual interpretation/i);
+	assert.match(capturePage.description, /use analyze_page_screenshot/i);
+	assert.match(capturePage.description, /fetch or scraping/i);
 	assert.match(capturePage.description, /network request/i);
-	assert.match(capturePage.description, /writes new local files/i);
-	assert.match(capturePage.description, /without .*modifying the target webpage/i);
+	assert.match(capturePage.description, /local browser/i);
+	assert.match(capturePage.description, /writes files/i);
+	assert.match(capturePage.description, /does not call the vision provider/i);
+	assert.match(capturePage.description, /modify the target page/i);
 	assert.deepEqual(capturePage.annotations, {
 		readOnlyHint: false,
 		destructiveHint: false,
@@ -114,15 +119,18 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	);
 
 	const analyzePage = findTool(tools, "analyze_page_screenshot");
+	assert.equal(analyzePage.title, "Analyze Page Screenshot");
 	assert.match(analyzePage.description, /visual appearance/i);
 	assert.match(analyzePage.description, /layout|visual hierarchy/i);
 	assert.match(analyzePage.description, /primarily textual retrieval/i);
-	assert.match(analyzePage.description, /writes screenshot files locally/i);
+	assert.match(analyzePage.description, /network request/i);
+	assert.match(analyzePage.description, /local browser/i);
+	assert.match(analyzePage.description, /writes screenshots/i);
 	assert.match(analyzePage.description, /included page context/i);
 	assert.match(analyzePage.description, /consume quota/i);
 	assert.match(analyzePage.description, /multiple images/i);
 	assert.match(analyzePage.description, /coverage metadata/i);
-	assert.match(analyzePage.description, /returns? .*warning/i);
+	assert.match(analyzePage.description, /warnings/i);
 	assert.deepEqual(analyzePage.annotations, {
 		readOnlyHint: false,
 		destructiveHint: false,
@@ -135,25 +143,20 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 		readFileSync(serverPath, "utf8"),
 		/async function handleAnalyzePageScreenshot[\s\S]*?defaultScreenshotMode:\s*"viewport"/,
 	);
-	assert.match(analyzePage.inputSchema.properties.screenshot_mode.description, /viewport by default/i);
-	assert.match(analyzePage.inputSchema.properties.screenshot_mode.description, /do not use sections merely/i);
-	assert.match(analyzePage.inputSchema.properties.screenshot_mode.description, /multiple images/i);
-	assert.match(
-		analyzePage.inputSchema.properties.screenshot_mode.description,
-		/do not assume it covers the complete page/i,
-	);
-	assert.match(analyzePage.inputSchema.properties.max_sections.description, /returns a warning/i);
-	assert.match(
-		analyzePage.inputSchema.properties.screenshot_mode.description,
-		/sections only when the task requires ordered coverage/i,
-	);
-	assert.match(
-		analyzePage.inputSchema.properties.screenshot_mode.description,
-		/full_page only when one complete-page image is specifically required/i,
-	);
 
+	const modeDescription = analyzePage.inputSchema.properties.screenshot_mode.description;
+	assert.match(modeDescription, /viewport \(default\)/i);
+	assert.match(modeDescription, /sections for ordered long-page/i);
+	assert.match(modeDescription, /full_page only when one complete image/i);
+	assert.match(modeDescription, /element for one selector/i);
+	assert.match(modeDescription, /check coverage metadata and warnings/i);
+	assert.match(analyzePage.inputSchema.properties.max_sections.description, /returns a warning/i);
+
+	// Project-level context-budget guardrails, not MCP protocol limits.
+	assert.ok(serverInstructions.length < 900, "Server instructions should remain concise");
+	assert.ok(modeDescription.length < 450, "Screenshot mode guidance should remain concise");
 	for (const tool of tools) {
 		assert.equal(tool.inputSchema.type, "object");
-		assert.ok(tool.description.length < 900, `${tool.name} description should remain concise`);
+		assert.ok(tool.description.length < 600, `${tool.name} description should remain concise`);
 	}
 });
