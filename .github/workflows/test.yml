@@ -29,7 +29,7 @@ jobs:
       - name: Run tests
         run: npm test
 
-  diagnose-tests:
+  finalize-coverage-fix:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -39,17 +39,18 @@ jobs:
           ref: agent/improve-tool-discovery
           fetch-depth: 0
 
-      - name: Shorten description
+      - name: Align description
         run: |
           python <<'PY'
           from pathlib import Path
 
           path = Path('src/server.js')
           text = path.read_text()
-          old = 'Sections mode may send multiple images and increase latency and provider usage; it returns coverage metadata and a warning when the configured limit is reached before the page end.'
-          new = 'Sections mode may send multiple images, increase latency and provider usage, and return a coverage warning if the limit is reached before the page end.'
-          if old in text:
-              path.write_text(text.replace(old, new, 1))
+          old = 'Sections mode may send multiple images, increase latency and provider usage, and return a coverage warning if the limit is reached before the page end.'
+          new = 'Sections may send multiple images, increase latency and provider usage, and return coverage metadata plus a warning if the limit is reached before the page end.'
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one description match, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1))
           PY
 
       - name: Setup Node
@@ -64,21 +65,14 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps --only-shell chromium
 
-      - name: Capture test output
-        run: |
-          set +e
-          npm test > /tmp/test-output.txt 2>&1
-          status=$?
-          {
-            echo "exit_status=$status"
-            tail -n 220 /tmp/test-output.txt
-          } > test-failure.txt
-          exit 0
+      - name: Run updated tests
+        run: npm test
 
-      - name: Commit diagnostic
+      - name: Commit final fix
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/server.js test-failure.txt
-          git commit -m "Diagnose sections coverage tests"
+          git rm test-failure.txt
+          git add src/server.js
+          git commit -m "Finalize sections coverage warning"
           git push origin HEAD:agent/improve-tool-discovery
