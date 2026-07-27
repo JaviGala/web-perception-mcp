@@ -19,7 +19,12 @@ import {
 import { extractPageContext } from "./extraction.js";
 import { launchBrowser, navigatePage, takeScreenshot } from "./browser.js";
 import { buildPageHealth } from "./page-health.js";
-import { sendToVisionModel, buildVisualPrompt, parseVisualResult } from "./vision.js";
+import {
+	sendToVisionModel,
+	buildVisualPrompt,
+	parseVisualResult,
+	visionCompletionWarnings,
+} from "./vision.js";
 import {
 	buildScreenshotSectionContext,
 	screenshotCaptureWarnings,
@@ -118,6 +123,8 @@ function pageCaptureProperties(defaultScreenshotMode = "viewport", maxSectionsMa
 	};
 }
 
+const MAX_TOKENS_DESCRIPTION =
+	"Maximum output tokens requested from the vision provider. If the provider reports finish_reason=length, the tool keeps the partial result and returns a warning that the analysis may be incomplete.";
 
 const TOOLS = [
 	{
@@ -151,7 +158,7 @@ const TOOLS = [
 					description: "Return natural-language text or request the server's structured JSON findings format.",
 				},
 				temperature: { type: "number", minimum: 0, maximum: 2 },
-				max_tokens: { type: "integer", minimum: 1 },
+				max_tokens: { type: "integer", minimum: 1, description: MAX_TOKENS_DESCRIPTION },
 			},
 			required: ["image_path", "prompt"],
 		},
@@ -201,7 +208,7 @@ const TOOLS = [
 					description: "Return natural-language text or request the server's structured JSON findings format.",
 				},
 				temperature: { type: "number", minimum: 0, maximum: 2 },
-				max_tokens: { type: "integer", minimum: 1 },
+				max_tokens: { type: "integer", minimum: 1, description: MAX_TOKENS_DESCRIPTION },
 			},
 			required: ["url", "prompt"],
 		},
@@ -359,8 +366,16 @@ async function handleAnalyzeImage(args = {}) {
 		const result = await sendToVisionModel(prompt, imagePaths, options);
 		const parsed = args.response_format === "json_object" ? parseVisualResult(result.content) : null;
 		return successResponse(
-			{ analysis: result.content, parsed: parsed?.findings || null, usage: result.usage },
-			parsed?.warning ? [parsed.warning] : [],
+			{
+				analysis: result.content,
+				parsed: parsed?.findings || null,
+				usage: result.usage,
+				finish_reason: result.finishReason,
+			},
+			[
+				...visionCompletionWarnings(result),
+				...(parsed?.warning ? [parsed.warning] : []),
+			],
 			{ tool: "analyze_image", duration_ms: Date.now() - startTime, image_count: imagePaths.length },
 		);
 	} catch (err) {
@@ -433,6 +448,7 @@ async function handleAnalyzePageScreenshot(args = {}) {
 		const warnings = [
 			...pageHealth.warnings,
 			...screenshotCaptureWarnings(result.screenshot),
+			...visionCompletionWarnings(visionResult),
 			...(parsed?.warning ? [parsed.warning] : []),
 		];
 
@@ -441,6 +457,7 @@ async function handleAnalyzePageScreenshot(args = {}) {
 				analysis: visionResult.content,
 				parsed: parsed?.findings || null,
 				usage: visionResult.usage,
+				finish_reason: visionResult.finishReason,
 				page_url: result.navResult.finalUrl,
 				http_status: result.navResult.statusCode,
 				page_title: result.pageContext?.title || null,
