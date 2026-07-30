@@ -10,6 +10,9 @@ non-visual model → local image or rendered webpage → vision model → ground
 
 The server is intentionally narrow: it exposes three tools for analysing existing images, capturing webpages, and analysing webpage screenshots. It is an experimental project rather than production-audited infrastructure.
 
+> [!NOTE]
+> As of v0.3.0, active feature development is paused. The project is in maintenance mode: future changes should focus on clear bugs, security fixes, and necessary compatibility updates rather than expanding scope.
+
 ## When it is useful
 
 Use this MCP when a model needs information that depends on visual appearance rather than text or HTML alone, for example:
@@ -64,7 +67,7 @@ Here, “read only” means that the tool does not modify its environment. It do
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 20+
 - An MCP client that can run local `stdio` servers
 - An API key for a vision provider with an OpenAI-style `/chat/completions` endpoint when using either analysis tool
 - Playwright Chromium Headless Shell for webpage capture or analysis
