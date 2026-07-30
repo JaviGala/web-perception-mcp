@@ -27,19 +27,40 @@ jobs:
       - name: Generate release files
         run: |
           npm version 0.3.0 --no-git-tag-version
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+
+          const packagePath = 'package.json';
+          const pkg = JSON.parse(readFileSync(packagePath, 'utf8'));
+          pkg.engines = { node: '>=20' };
+          writeFileSync(packagePath, `${JSON.stringify(pkg, null, '\t')}\n`);
+          NODE
           npm install '@modelcontextprotocol/sdk@^1.30.0' --save
           npm audit fix || true
           npm ls @modelcontextprotocol/sdk @hono/node-server || true
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
-          const path = 'src/server.js';
-          const source = readFileSync(path, 'utf8');
-          const updated = source.replace('version: "0.2.0"', 'version: "0.3.0"');
-          if (updated === source) throw new Error('Server version 0.2.0 not found exactly once');
-          writeFileSync(path, updated);
+
+          const serverPath = 'src/server.js';
+          const serverSource = readFileSync(serverPath, 'utf8');
+          const serverUpdated = serverSource.replace('version: "0.2.0"', 'version: "0.3.0"');
+          if (serverUpdated === serverSource) throw new Error('Server version 0.2.0 not found exactly once');
+          writeFileSync(serverPath, serverUpdated);
+
+          const readmePath = 'README.md';
+          let readme = readFileSync(readmePath, 'utf8');
+          const scopeMarker = 'The server is intentionally narrow: it exposes three tools for analysing existing images, capturing webpages, and analysing webpage screenshots. It is an experimental project rather than production-audited infrastructure.\n';
+          const maintenanceNote = '\n> [!NOTE]\n> As of v0.3.0, active feature development is paused. The project is in maintenance mode: future changes should focus on clear bugs, security fixes, and necessary compatibility updates rather than expanding scope.\n';
+          if (!readme.includes(scopeMarker)) throw new Error('README scope marker not found');
+          if (!readme.includes('> As of v0.3.0, active feature development is paused.')) {
+            readme = readme.replace(scopeMarker, scopeMarker + maintenanceNote);
+          }
+          if (!readme.includes('- Node.js 18+')) throw new Error('README Node.js 18+ requirement not found');
+          readme = readme.replace('- Node.js 18+', '- Node.js 20+');
+          writeFileSync(readmePath, readme);
           NODE
           mkdir -p release-generated/src
-          cp package.json package-lock.json release-generated/
+          cp package.json package-lock.json README.md release-generated/
           cp src/server.js release-generated/src/server.js
           npm audit --omit=dev --json > release-generated/audit.json || true
 
