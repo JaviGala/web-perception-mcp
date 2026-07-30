@@ -28,6 +28,8 @@ jobs:
         run: |
           npm version 0.3.0 --no-git-tag-version
           npm install '@modelcontextprotocol/sdk@^1.30.0' --save
+          npm audit fix || true
+          npm ls @modelcontextprotocol/sdk @hono/node-server || true
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
           const path = 'src/server.js';
