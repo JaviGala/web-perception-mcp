@@ -17,6 +17,18 @@ function findTool(tools, name) {
 	return tool;
 }
 
+function assertStructuredOutputDescription(description) {
+	assert.match(description, /json findings/i);
+	assert.match(description, /summary/i);
+	assert.match(description, /observations/i);
+	assert.match(description, /interpretations/i);
+	assert.match(description, /uncertainty/i);
+	assert.match(description, /data\.parsed/i);
+	assert.match(description, /data\.analysis/i);
+	assert.match(description, /best effort/i);
+	assert.match(description, /warnings/i);
+}
+
 test("MCP initialization and tool metadata explain how to select the visual tools", async (t) => {
 	const transport = new StdioClientTransport({
 		command: process.execPath,
@@ -58,18 +70,27 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 		"capture_page_screenshot",
 		"existing local images",
 		"screenshot files without interpretation",
-		"visual interpretation of rendered webpages",
+		"rendered-page visual analysis",
 		"fetch or scraping",
 		"viewport by default",
-		"ordered long-page",
+		"ordered long-page coverage",
+		"starts at the page top",
+		"cannot resume",
 		"coverage metadata and warnings",
+		"json_object",
+		"summary",
+		"observations",
+		"interpretations",
+		"uncertainty",
+		"data.parsed",
+		"best effort",
 		"untrusted data",
 		"provider analysis",
-		"network",
+		"network/browser",
 		"write screenshots",
-		"configured provider",
+		"provider",
 		"consume quota",
-		"do not modify source images or target webpages",
+		"do not modify source images or target pages",
 	]) {
 		assert.ok(instructions.includes(expected), `Instructions should mention ${expected}`);
 	}
@@ -95,6 +116,7 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	});
 	assert.deepEqual(analyzeImage.inputSchema.required, ["image_path", "prompt"]);
 	assert.match(analyzeImage.inputSchema.properties.image_path.description, /allowed_image_dirs/i);
+	assertStructuredOutputDescription(analyzeImage.inputSchema.properties.response_format.description);
 
 	const capturePage = findTool(tools, "capture_page_screenshot");
 	assert.equal(capturePage.title, "Capture Page Screenshot");
@@ -120,6 +142,10 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 		capturePage.inputSchema.properties.include_open_command.description,
 		/only when the user explicitly asks/i,
 	);
+	assert.match(capturePage.inputSchema.properties.include_page_context.description, /pixels alone/i);
+	assert.match(capturePage.inputSchema.properties.screenshot_mode.description, /starts at the page top/i);
+	assert.match(capturePage.inputSchema.properties.screenshot_mode.description, /cannot resume/i);
+	assert.match(capturePage.inputSchema.properties.max_sections.description, /does not enable continuation/i);
 
 	const analyzePage = findTool(tools, "analyze_page_screenshot");
 	assert.equal(analyzePage.title, "Analyze Page Screenshot");
@@ -153,8 +179,13 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(modeDescription, /sections for ordered long-page/i);
 	assert.match(modeDescription, /full_page only when one complete image/i);
 	assert.match(modeDescription, /element for one selector/i);
+	assert.match(modeDescription, /starts at the page top/i);
+	assert.match(modeDescription, /cannot resume/i);
 	assert.match(modeDescription, /check coverage metadata and warnings/i);
+	assert.match(analyzePage.inputSchema.properties.max_sections.description, /does not enable continuation/i);
 	assert.match(analyzePage.inputSchema.properties.max_sections.description, /returns a warning/i);
+	assert.match(analyzePage.inputSchema.properties.include_page_context.description, /pixels alone/i);
+	assertStructuredOutputDescription(analyzePage.inputSchema.properties.response_format.description);
 
 	// Project-level context-budget guardrails, not MCP protocol limits.
 	assert.ok(serverInstructions.length < 900, "Server instructions should remain concise");

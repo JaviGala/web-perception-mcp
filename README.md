@@ -46,7 +46,7 @@ The server also supplies concise MCP instructions and tool descriptions so compa
 ### Choosing a screenshot mode
 
 - `viewport` is the default. Use it for short pages, the initial visible state, or when the task does not require content below the first viewport.
-- `sections` captures ordered viewport-sized images across a long page. Use it only when the task requires content from multiple scroll positions. It is not a safer default: it can create and analyse multiple images.
+- `sections` captures ordered viewport-sized images across a long page. Use it only when the task requires content from multiple scroll positions. Every `sections` call starts at the top of the page; the current API has no offset or continuation token, so a second call cannot resume where a truncated call stopped and will normally capture the same upper range again.
 - `full_page` creates one complete-page image. Reserve it for specifically requested, reasonably short pages; very tall images can reduce visual legibility.
 - `element` captures one CSS selector when the task concerns a specific visible component.
 
@@ -143,7 +143,7 @@ See [`.env.example`](./.env.example) for the complete configuration template. Ne
 
 The two analysis tools accept `response_format: "text"` (the default) or `response_format: "json_object"`.
 
-When JSON is requested, the MCP asks the provider for a single object with this structure:
+When JSON is requested, the MCP asks the provider for a single findings object with this structure:
 
 ```json
 {
@@ -154,9 +154,28 @@ When JSON is requested, the MCP asks the provider for a single object with this 
 }
 ```
 
-All four fields are required by the output contract; the arrays may be empty. The raw provider response is returned in `data.analysis`, while the parsed value is returned in `data.parsed`.
+All four fields are required by the output contract; the arrays may be empty. This findings object is not the top-level MCP response. Successful tool calls are returned inside the server's standard envelope:
 
-The parser currently checks JSON syntax, not this schema. A provider can therefore return syntactically valid JSON with missing, additional, or incorrectly typed fields without triggering fallback. Callers that depend on the exact structure should validate `data.parsed` themselves.
+```json
+{
+  "ok": true,
+  "data": {
+    "analysis": "raw provider response",
+    "parsed": {
+      "summary": "...",
+      "observations": [],
+      "interpretations": [],
+      "uncertainty": []
+    }
+  },
+  "warnings": [],
+  "meta": {}
+}
+```
+
+The raw provider response is returned in `data.analysis`; `data.parsed` contains the parsed findings when `json_object` is requested. Other tool-specific fields are also present inside `data`.
+
+`json_object` is a request to the configured provider, not a guarantee that the provider will obey the contract. The parser currently checks JSON syntax, not the four-field schema. A provider can therefore return syntactically valid JSON with missing, additional, or incorrectly typed fields without triggering fallback. Callers that depend on the exact structure should validate `data.parsed` themselves and check `warnings`.
 
 Some providers or models may ignore JSON mode. If a non-empty response is not valid JSON, the MCP preserves the raw response in `data.parsed.summary`, returns empty `observations` and `interpretations` arrays, adds an `uncertainty` entry explaining the parse failure, and reports this warning:
 
@@ -173,6 +192,10 @@ Screenshots are stored by default in an app-owned folder inside the operating-sy
 Section capture uses several viewport-sized screenshots rather than one extremely tall image. `analyze_page_screenshot` sends at most eight sections to the vision model; capture-only requests can create up to twenty.
 
 Because `sections` stops at `max_sections`, it may not reach the page end. Check `reached_end` and `truncated`; `document_height`, `last_captured_bottom`, `remaining_pixels`, `max_sections`, and `max_sections_reached` provide the supporting values, and incomplete coverage returns a warning.
+
+A truncated `sections` capture cannot currently be resumed by calling the tool again. Every call begins at the top of the page, and the schema does not expose a starting scroll offset or continuation token. Repeating the same call will normally recapture the same range. Sequential continuation is tracked separately in issue #15; representative sampling of very long pages is a different problem tracked in issue #14.
+
+When `include_page_context` is true, the result and provider prompt may include compact metadata and extracted page text in addition to the screenshots. Set it to false when evaluating screenshot-only visual evidence; otherwise some conclusions may be supported by extracted text rather than pixels alone.
 
 Page responses include an `http_status` and `page_health` summary to help distinguish a useful capture from HTTP errors, bot protection, login walls, paywalls, JavaScript failures, or unusually empty pages.
 
