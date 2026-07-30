@@ -249,6 +249,13 @@ function appendResponseFormatInstructions(prompt, responseFormat) {
 	return `${prompt}\n\n${JSON_OUTPUT_CONTRACT}`;
 }
 
+export function visionCompletionWarnings(result) {
+	if (result?.finishReason !== "length") return [];
+	return [
+		"Vision provider stopped the response because the output length limit was reached. The analysis may be incomplete.",
+	];
+}
+
 export async function sendToVisionModel(prompt, imagePaths = [], options = {}) {
 	const { responseFormat, temperature, maxTokens } = options;
 	const config = visionConfig();
@@ -327,11 +334,15 @@ export async function sendToVisionModel(prompt, imagePaths = [], options = {}) {
 		}
 
 		const data = await response.json();
-		const choice = data.choices?.[0]?.message?.content || "";
+		const firstChoice = data.choices?.[0] || null;
+		const choice = firstChoice?.message?.content || "";
+		const finishReason = typeof firstChoice?.finish_reason === "string" && firstChoice.finish_reason.trim()
+			? firstChoice.finish_reason.trim()
+			: null;
 		const usage = data.usage || null;
 
-		safeLog("info", "Vision response received", { length: choice.length, usage });
-		return { content: choice, usage };
+		safeLog("info", "Vision response received", { length: choice.length, usage, finishReason });
+		return { content: choice, usage, finishReason };
 	} catch (err) {
 		if (err?.name === "AbortError" || err?.name === "TimeoutError") {
 			const timeoutError = new Error(
