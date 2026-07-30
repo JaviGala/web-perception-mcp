@@ -29,6 +29,26 @@ function assertStructuredOutputDescription(description) {
 	assert.match(description, /warnings/i);
 }
 
+function assertContinuationMetadata(tool) {
+	const startY = tool.inputSchema.properties.start_y;
+	assert.equal(startY.type, "integer");
+	assert.equal(startY.minimum, 0);
+	assert.equal(startY.default, 0);
+	assert.match(startY.description, /sections mode/i);
+	assert.match(startY.description, /next_start_y/i);
+	assert.match(startY.description, /stateless/i);
+	assert.match(startY.description, /reloads the page/i);
+	assert.match(startY.description, /first_captured_y/i);
+	assert.match(startY.description, /ignored by other/i);
+
+	assert.match(tool.inputSchema.properties.screenshot_mode.description, /start_y/i);
+	assert.match(tool.inputSchema.properties.screenshot_mode.description, /next_start_y/i);
+	assert.match(tool.inputSchema.properties.screenshot_mode.description, /stateless/i);
+	assert.match(tool.inputSchema.properties.max_sections.description, /next_start_y/i);
+	assert.match(tool.inputSchema.properties.max_sections.description, /continuation/i);
+	assert.match(tool.inputSchema.properties.section_overlap.description, /continuation/i);
+}
+
 test("MCP initialization and tool metadata explain how to select the visual tools", async (t) => {
 	const transport = new StdioClientTransport({
 		command: process.execPath,
@@ -74,9 +94,11 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 		"fetch or scraping",
 		"viewport by default",
 		"ordered long-page coverage",
-		"starts at the page top",
-		"cannot resume",
-		"coverage metadata and warnings",
+		"next_start_y",
+		"start_y",
+		"reloads the page",
+		"actual positions",
+		"warnings",
 		"json_object",
 		"summary",
 		"observations",
@@ -143,9 +165,7 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 		/only when the user explicitly asks/i,
 	);
 	assert.match(capturePage.inputSchema.properties.include_page_context.description, /pixels alone/i);
-	assert.match(capturePage.inputSchema.properties.screenshot_mode.description, /starts at the page top/i);
-	assert.match(capturePage.inputSchema.properties.screenshot_mode.description, /cannot resume/i);
-	assert.match(capturePage.inputSchema.properties.max_sections.description, /does not enable continuation/i);
+	assertContinuationMetadata(capturePage);
 
 	const analyzePage = findTool(tools, "analyze_page_screenshot");
 	assert.equal(analyzePage.title, "Analyze Page Screenshot");
@@ -179,11 +199,10 @@ test("MCP initialization and tool metadata explain how to select the visual tool
 	assert.match(modeDescription, /sections for ordered long-page/i);
 	assert.match(modeDescription, /full_page only when one complete image/i);
 	assert.match(modeDescription, /element for one selector/i);
-	assert.match(modeDescription, /starts at the page top/i);
-	assert.match(modeDescription, /cannot resume/i);
-	assert.match(modeDescription, /check coverage metadata and warnings/i);
-	assert.match(analyzePage.inputSchema.properties.max_sections.description, /does not enable continuation/i);
-	assert.match(analyzePage.inputSchema.properties.max_sections.description, /returns a warning/i);
+	assert.match(modeDescription, /start_y/i);
+	assert.match(modeDescription, /next_start_y/i);
+	assert.match(modeDescription, /check actual positions, coverage metadata, and warnings/i);
+	assertContinuationMetadata(analyzePage);
 	assert.match(analyzePage.inputSchema.properties.include_page_context.description, /pixels alone/i);
 	assertStructuredOutputDescription(analyzePage.inputSchema.properties.response_format.description);
 

@@ -83,10 +83,16 @@ test("takeScreenshot sections returns multiple ordered screenshots", async () =>
 		assert.equal(screenshot.metadata.mode, "sections");
 		assert.equal(screenshot.paths.length, 3);
 		assert.equal(screenshot.metadata.sections.length, 3);
+		assert.equal(screenshot.metadata.start_y, 0);
+		assert.equal(screenshot.metadata.first_captured_y, 0);
 		assert.equal(screenshot.metadata.max_sections, 3);
 		assert.equal(screenshot.metadata.max_sections_reached, true);
 		assert.equal(screenshot.metadata.reached_end, false);
 		assert.equal(screenshot.metadata.truncated, true);
+		assert.equal(
+			screenshot.metadata.next_start_y,
+			screenshot.metadata.sections.at(-1).y + 450,
+		);
 		assert.equal(
 			screenshot.metadata.last_captured_bottom < screenshot.metadata.document_height,
 			true,
@@ -100,6 +106,70 @@ test("takeScreenshot sections returns multiple ordered screenshots", async () =>
 		for (const path of screenshot.paths) {
 			assert.equal(existsSync(path), true);
 		}
+	} finally {
+		await context?.close().catch(() => {});
+		await closeBrowser();
+	}
+});
+
+test("takeScreenshot sections can continue from a previous next_start_y", async () => {
+	let context;
+	try {
+		const launched = await launchBrowser({ viewport: { width: 800, height: 500 } });
+		context = launched.context;
+		const page = launched.page;
+		await page.setContent(`<!doctype html><html><head><style>html,body{margin:0}</style></head><body><main style="height: 3000px">Tall page</main></body></html>`);
+
+		const first = await takeScreenshot(page, {
+			mode: "sections",
+			maxSections: 3,
+			sectionOverlap: 50,
+		});
+		assert.equal(first.metadata.reached_end, false);
+		assert.equal(first.metadata.next_start_y, 1350);
+
+		const second = await takeScreenshot(page, {
+			mode: "sections",
+			startY: first.metadata.next_start_y,
+			maxSections: 3,
+			sectionOverlap: 50,
+		});
+
+		assert.equal(second.metadata.start_y, first.metadata.next_start_y);
+		assert.equal(second.metadata.first_captured_y, first.metadata.next_start_y);
+		assert.equal(second.metadata.sections[0].y, first.metadata.next_start_y);
+		assert.equal(
+			first.metadata.sections.at(-1).y + first.metadata.sections.at(-1).height - second.metadata.sections[0].y,
+			50,
+		);
+	} finally {
+		await context?.close().catch(() => {});
+		await closeBrowser();
+	}
+});
+
+test("takeScreenshot sections clamps an unreachable start offset to the final viewport", async () => {
+	let context;
+	try {
+		const launched = await launchBrowser({ viewport: { width: 800, height: 500 } });
+		context = launched.context;
+		const page = launched.page;
+		await page.setContent(`<!doctype html><html><head><style>html,body{margin:0}</style></head><body><main style="height: 1600px">Tall page</main></body></html>`);
+
+		const screenshot = await takeScreenshot(page, {
+			mode: "sections",
+			startY: 10000,
+			maxSections: 3,
+			sectionOverlap: 50,
+		});
+
+		assert.equal(screenshot.paths.length, 1);
+		assert.equal(screenshot.metadata.start_y, 10000);
+		assert.equal(screenshot.metadata.first_captured_y, 1100);
+		assert.equal(screenshot.metadata.reached_end, true);
+		assert.equal(screenshot.metadata.truncated, false);
+		assert.equal(screenshot.metadata.remaining_pixels, 0);
+		assert.equal(screenshot.metadata.next_start_y, null);
 	} finally {
 		await context?.close().catch(() => {});
 		await closeBrowser();
@@ -133,6 +203,7 @@ test("takeScreenshot sections records the browser's actual final scroll position
 		assert.equal(screenshot.metadata.reached_end, true);
 		assert.equal(screenshot.metadata.truncated, false);
 		assert.equal(screenshot.metadata.remaining_pixels, 0);
+		assert.equal(screenshot.metadata.next_start_y, null);
 		assert.equal(
 			screenshot.metadata.last_captured_bottom,
 			screenshot.metadata.document_height,

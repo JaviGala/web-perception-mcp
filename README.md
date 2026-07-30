@@ -46,7 +46,7 @@ The server also supplies concise MCP instructions and tool descriptions so compa
 ### Choosing a screenshot mode
 
 - `viewport` is the default. Use it for short pages, the initial visible state, or when the task does not require content below the first viewport.
-- `sections` captures ordered viewport-sized images across a long page. Use it only when the task requires content from multiple scroll positions. Every `sections` call starts at the top of the page; the current API has no offset or continuation token, so a second call cannot resume where a truncated call stopped and will normally capture the same upper range again.
+- `sections` captures ordered viewport-sized images across a long page. It starts at `start_y: 0` by default. When a pass is truncated, use its `next_start_y` as the `start_y` of a later call to continue sequentially. Continuation is stateless: every call reloads the URL, so check `first_captured_y` and warnings rather than assuming pixel-perfect continuity.
 - `full_page` creates one complete-page image. Reserve it for specifically requested, reasonably short pages; very tall images can reduce visual legibility.
 - `element` captures one CSS selector when the task concerns a specific visible component.
 
@@ -191,9 +191,22 @@ Screenshots are stored by default in an app-owned folder inside the operating-sy
 
 Section capture uses several viewport-sized screenshots rather than one extremely tall image. `analyze_page_screenshot` sends at most eight sections to the vision model; capture-only requests can create up to twenty.
 
-Because `sections` stops at `max_sections`, it may not reach the page end. Check `reached_end` and `truncated`; `document_height`, `last_captured_bottom`, `remaining_pixels`, `max_sections`, and `max_sections_reached` provide the supporting values, and incomplete coverage returns a warning.
+Because `sections` stops at `max_sections`, it may not reach the page end. Check `reached_end` and `truncated`; `start_y`, `first_captured_y`, `document_height`, `last_captured_bottom`, `remaining_pixels`, `next_start_y`, `max_sections`, and `max_sections_reached` describe the captured range. A truncated pass returns a warning and normally a numeric `next_start_y`; a pass that reaches the current page end returns `next_start_y: null`.
 
-A truncated `sections` capture cannot currently be resumed by calling the tool again. Every call begins at the top of the page, and the schema does not expose a starting scroll offset or continuation token. Repeating the same call will normally recapture the same range. Sequential continuation is tracked separately in issue #15; representative sampling of very long pages is a different problem tracked in issue #14.
+To continue sequentially, pass the previous `next_start_y` back as `start_y`:
+
+```json
+{
+  "screenshot_mode": "sections",
+  "start_y": 6240,
+  "max_sections": 8,
+  "section_overlap": 120
+}
+```
+
+This is document-offset continuation, not a retained browser session. The URL is loaded again for each call. Dynamic content, lazy loading, ads, banners, personalisation, or other layout changes can change the document height or make the requested offset unavailable. The browser may also clamp a near-end offset to the final scrollable viewport. In those cases `first_captured_y` differs from `start_y` and the tool returns a warning; actual capture positions are authoritative.
+
+Representative or distributed sampling across a very long page is a separate problem from this sequential continuation mechanism.
 
 When `include_page_context` is true, the result and provider prompt may include compact metadata and extracted page text in addition to the screenshots. Set it to false when evaluating screenshot-only visual evidence; otherwise some conclusions may be supported by extracted text rather than pixels alone.
 
