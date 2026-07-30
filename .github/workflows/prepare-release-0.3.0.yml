@@ -9,7 +9,7 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   prepare:
@@ -65,11 +65,9 @@ jobs:
           npm audit --omit=dev --json > release-generated/audit.json || true
 
       - name: Production licence summary
-        continue-on-error: true
         run: npx --yes license-checker-rseidelsohn --production --excludePrivatePackages --summary | tee release-generated/license-summary.txt
 
       - name: Production licence allowlist
-        continue-on-error: true
         run: npx --yes license-checker-rseidelsohn --production --excludePrivatePackages --onlyAllow 'MIT;MIT-0;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC' | tee release-generated/license-allowlist.txt
 
       - name: Upload generated release files
@@ -81,3 +79,16 @@ jobs:
 
       - name: Enforce production audit
         run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Commit generated release files
+        if: github.event_name == 'push'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json README.md src/server.js
+          if git diff --cached --quiet; then
+            echo 'No generated release changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Prepare release 0.3.0'
+          git push origin HEAD:maintenance/release-0.3.0
