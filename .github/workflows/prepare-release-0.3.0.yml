@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - maintenance/release-0.3.0
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
