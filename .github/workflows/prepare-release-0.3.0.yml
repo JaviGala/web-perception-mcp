@@ -1,0 +1,57 @@
+name: Prepare release 0.3.0
+
+on:
+  push:
+    branches:
+      - maintenance/release-0.3.0
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Generate release files
+        run: |
+          npm version 0.3.0 --no-git-tag-version
+          npm install '@modelcontextprotocol/sdk@^1.30.0' --save
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const path = 'src/server.js';
+          const source = readFileSync(path, 'utf8');
+          const updated = source.replace('version: "0.2.0"', 'version: "0.3.0"');
+          if (updated === source) throw new Error('Server version 0.2.0 not found exactly once');
+          writeFileSync(path, updated);
+          NODE
+          mkdir -p release-generated/src
+          cp package.json package-lock.json release-generated/
+          cp src/server.js release-generated/src/server.js
+          npm audit --omit=dev --json > release-generated/audit.json || true
+
+      - name: Production licence summary
+        continue-on-error: true
+        run: npx --yes license-checker-rseidelsohn --production --excludePrivatePackages --summary | tee release-generated/license-summary.txt
+
+      - name: Production licence allowlist
+        continue-on-error: true
+        run: npx --yes license-checker-rseidelsohn --production --excludePrivatePackages --onlyAllow 'MIT;MIT-0;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC' | tee release-generated/license-allowlist.txt
+
+      - name: Upload generated release files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-0.3.0-generated
+          path: release-generated/
+
+      - name: Enforce production audit
+        run: npm audit --omit=dev --audit-level=moderate
