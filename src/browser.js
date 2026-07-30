@@ -202,6 +202,7 @@ export async function navigatePage(page, url, options = {}) {
  * @param {string} [options.outputPath]
  * @param {number} [options.sectionOverlap=120]
  * @param {number} [options.maxSections=6]
+ * @param {number} [options.startY=0]
  * @returns {Promise<{path: string, paths?: string[], metadata: object}>}
  */
 export async function takeScreenshot(page, options = {}) {
@@ -212,6 +213,7 @@ export async function takeScreenshot(page, options = {}) {
 		outputPath = null,
 		sectionOverlap = 120,
 		maxSections = 6,
+		startY = 0,
 	} = options;
 
 	const timestamp = Date.now();
@@ -239,6 +241,7 @@ export async function takeScreenshot(page, options = {}) {
 			viewport,
 			sectionOverlap,
 			maxSections,
+			startY,
 		});
 		paths = result.paths;
 		sections = result.sections;
@@ -341,6 +344,7 @@ async function takeSectionScreenshots(page, options) {
 		viewport,
 		sectionOverlap,
 		maxSections,
+		startY = 0,
 	} = options;
 
 	const dimensions = await getPageDimensions(page, viewport);
@@ -349,11 +353,18 @@ async function takeSectionScreenshots(page, options) {
 		y: window.scrollY,
 	}));
 	const step = Math.max(1, viewport.height - sectionOverlap);
+	const normalizedStartY = Number.isFinite(startY) ? Math.max(0, Math.trunc(startY)) : 0;
+	const maxScrollY = Math.max(0, dimensions.height - viewport.height);
+	const effectiveStartY = Math.min(normalizedStartY, maxScrollY);
 	const paths = [];
 	const sections = [];
 	let previousScrollY = null;
 
-	for (let requestedY = 0, index = 0; requestedY < dimensions.height && index < maxSections; requestedY += step, index++) {
+	for (
+		let requestedY = effectiveStartY, index = 0;
+		requestedY < dimensions.height && index < maxSections;
+		requestedY += step, index++
+	) {
 		await page.evaluate((scrollY) => window.scrollTo(0, scrollY), requestedY);
 		await page.waitForTimeout(150);
 
@@ -377,15 +388,19 @@ async function takeSectionScreenshots(page, options) {
 	}
 
 	const finalDimensions = await getPageDimensions(page, dimensions);
+	const firstSection = sections[0] || null;
 	const lastSection = sections.at(-1);
 	const lastCapturedBottom = lastSection
 		? Math.min(finalDimensions.height, lastSection.y + lastSection.height)
 		: 0;
 	const reachedEnd = lastCapturedBottom >= finalDimensions.height;
 	const coverage = {
+		start_y: normalizedStartY,
+		first_captured_y: firstSection?.y ?? null,
 		document_height: finalDimensions.height,
 		last_captured_bottom: lastCapturedBottom,
 		remaining_pixels: Math.max(0, finalDimensions.height - lastCapturedBottom),
+		next_start_y: reachedEnd || !lastSection ? null : lastSection.y + step,
 		reached_end: reachedEnd,
 		truncated: !reachedEnd,
 		max_sections_reached: sections.length >= maxSections,
