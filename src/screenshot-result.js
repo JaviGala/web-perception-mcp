@@ -25,9 +25,12 @@ export function screenshotCoverage(screenshot) {
 	if (metadata?.mode !== "sections" || typeof metadata.reached_end !== "boolean") return null;
 
 	return {
+		start_y: metadata.start_y,
+		first_captured_y: metadata.first_captured_y,
 		document_height: metadata.document_height,
 		last_captured_bottom: metadata.last_captured_bottom,
 		remaining_pixels: metadata.remaining_pixels,
+		next_start_y: metadata.next_start_y,
 		reached_end: metadata.reached_end,
 		truncated: metadata.truncated,
 		max_sections_reached: metadata.max_sections_reached,
@@ -37,15 +40,30 @@ export function screenshotCoverage(screenshot) {
 
 export function screenshotCaptureWarnings(screenshot) {
 	const coverage = screenshotCoverage(screenshot);
-	if (!coverage?.truncated) return [];
+	if (!coverage) return [];
 
-	if (coverage.max_sections_reached) {
-		return [
-			`Sections capture reached the maximum of ${coverage.max_sections} screenshots before the end of the page. ${coverage.remaining_pixels} vertical pixels were not captured.`,
-		];
+	const warnings = [];
+	if (
+		Number.isFinite(coverage.start_y) &&
+		Number.isFinite(coverage.first_captured_y) &&
+		coverage.start_y !== coverage.first_captured_y
+	) {
+		warnings.push(
+			`Requested sections start_y=${coverage.start_y}, but the browser captured first at y=${coverage.first_captured_y} for the current document. Page geometry or browser scroll clamping may have changed the continuation position.`,
+		);
 	}
 
-	return ["Sections capture ended before reaching the end of the page."];
+	if (!coverage.truncated) return warnings;
+
+	if (coverage.max_sections_reached) {
+		warnings.push(
+			`Sections capture reached the maximum of ${coverage.max_sections} screenshots before the end of the page. ${coverage.remaining_pixels} vertical pixels were not captured.`,
+		);
+		return warnings;
+	}
+
+	warnings.push("Sections capture ended before reaching the end of the page.");
+	return warnings;
 }
 
 export function buildScreenshotSectionContext(screenshot) {
@@ -63,7 +81,7 @@ export function buildScreenshotSectionContext(screenshot) {
 	if (coverage) {
 		lines.push("", "SECTION COVERAGE:");
 		lines.push(
-			`- document_height=${coverage.document_height}, last_captured_bottom=${coverage.last_captured_bottom}, remaining_pixels=${coverage.remaining_pixels}, reached_end=${coverage.reached_end}, truncated=${coverage.truncated}, max_sections_reached=${coverage.max_sections_reached}`,
+			`- start_y=${coverage.start_y}, first_captured_y=${coverage.first_captured_y}, document_height=${coverage.document_height}, last_captured_bottom=${coverage.last_captured_bottom}, remaining_pixels=${coverage.remaining_pixels}, next_start_y=${coverage.next_start_y}, reached_end=${coverage.reached_end}, truncated=${coverage.truncated}, max_sections_reached=${coverage.max_sections_reached}`,
 		);
 		for (const warning of screenshotCaptureWarnings(screenshot)) {
 			lines.push(`- WARNING: ${warning}`);
