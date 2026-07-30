@@ -1,0 +1,16 @@
+name: Remove temporary publish branch
+
+on:
+  push:
+    branches:
+      - maintenance/publish-0.3.0
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete temporary branch
+        run: git push "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" --delete maintenance/publish-0.3.0
