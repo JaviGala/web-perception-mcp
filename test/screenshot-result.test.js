@@ -24,9 +24,12 @@ function sectionScreenshot(overrides = {}) {
 				{ index: 2, path: "/tmp/web-perception-mcp/web-perception-screenshot-1-section-2.png", y: 780, height: 900 },
 				{ index: 3, path: "/tmp/web-perception-mcp/web-perception-screenshot-1-section-3.png", y: 1560, height: 900 },
 			],
+			start_y: 0,
+			first_captured_y: 0,
 			document_height: 3000,
 			last_captured_bottom: 2460,
 			remaining_pixels: 540,
+			next_start_y: 2340,
 			reached_end: false,
 			truncated: true,
 			max_sections_reached: true,
@@ -59,14 +62,17 @@ test("screenshotImagePaths falls back to single screenshot path", () => {
 	]);
 });
 
-test("buildScreenshotSectionContext includes segments and incomplete coverage", () => {
+test("buildScreenshotSectionContext includes segments and continuation coverage", () => {
 	const context = buildScreenshotSectionContext(sectionScreenshot());
 
 	assert.match(context, /SCREENSHOT SEGMENTS/);
 	assert.match(context, /Section 1: y=0, height=900/);
 	assert.match(context, /Section 3: y=1560, height=900/);
 	assert.match(context, /SECTION COVERAGE/);
+	assert.match(context, /start_y=0/);
+	assert.match(context, /first_captured_y=0/);
 	assert.match(context, /remaining_pixels=540/);
+	assert.match(context, /next_start_y=2340/);
 	assert.match(context, /reached_end=false/);
 	assert.match(context, /WARNING: Sections capture reached the maximum of 3 screenshots/);
 });
@@ -75,9 +81,12 @@ test("screenshotCaptureWarnings reports when max_sections truncates the page", (
 	const screenshot = sectionScreenshot();
 
 	assert.deepEqual(screenshotCoverage(screenshot), {
+		start_y: 0,
+		first_captured_y: 0,
 		document_height: 3000,
 		last_captured_bottom: 2460,
 		remaining_pixels: 540,
+		next_start_y: 2340,
 		reached_end: false,
 		truncated: true,
 		max_sections_reached: true,
@@ -88,11 +97,30 @@ test("screenshotCaptureWarnings reports when max_sections truncates the page", (
 	]);
 });
 
-test("screenshotCaptureWarnings is empty when sections reach the page end", () => {
+test("screenshotCaptureWarnings reports when the requested start offset was adjusted", () => {
+	const screenshot = sectionScreenshot({
+		start_y: 4000,
+		first_captured_y: 2100,
+		document_height: 3000,
+		last_captured_bottom: 3000,
+		remaining_pixels: 0,
+		next_start_y: null,
+		reached_end: true,
+		truncated: false,
+		max_sections_reached: false,
+	});
+
+	assert.deepEqual(screenshotCaptureWarnings(screenshot), [
+		"Requested sections start_y=4000, but the browser captured first at y=2100 for the current document. Page geometry or browser scroll clamping may have changed the continuation position.",
+	]);
+});
+
+test("screenshotCaptureWarnings is empty when sections reach the page end without adjustment", () => {
 	const screenshot = sectionScreenshot({
 		document_height: 2460,
 		last_captured_bottom: 2460,
 		remaining_pixels: 0,
+		next_start_y: null,
 		reached_end: true,
 		truncated: false,
 	});
