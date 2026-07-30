@@ -1,6 +1,6 @@
 {
 	"name": "web-perception-mcp",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Delegated vision MCP server for images and webpage screenshots",
 	"type": "module",
 	"private": true,
@@ -12,9 +12,12 @@
 		"test": "npm run check && node --test test/*.test.js"
 	},
 	"dependencies": {
-		"@modelcontextprotocol/sdk": "^1.12.0",
+		"@modelcontextprotocol/sdk": "^1.30.0",
 		"@mozilla/readability": "^0.6.0",
 		"jsdom": "^25.0.0",
 		"playwright": "^1.49.0"
+	},
+	"engines": {
+		"node": ">=20"
 	}
 }
